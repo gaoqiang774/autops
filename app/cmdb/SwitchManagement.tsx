@@ -25,13 +25,13 @@ export default function SwitchManagement({
   const [form, setForm] = useState({
     name: "",
     assetNo: `NET-BJ-ACC0${switches.length + 1}`,
-    roomId: "room-1",
-    cabinetId: "cab-101",
+    roomId: rooms[0]?.id || "room-1",
+    cabinetId: cabinets[0]?.id || "cab-llq-01",
     startU: 42,
     ip: "10.100.0.15",
-    brand: "华为" as SwitchDevice["brand"],
+    brand: "华为" as any,
     model: "CloudEngine 6881-48T6CQ",
-    role: "接入交换机" as SwitchDevice["role"],
+    role: "接入交换机" as any,
     portCount: 48
   });
 

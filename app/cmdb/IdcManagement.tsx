@@ -38,10 +38,10 @@ export default function IdcManagement({
   onNavigateToBusiness
 }: IdcManagementProps) {
   // Navigation & Selection State
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>("room-1");
-  const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>("cab-101");
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(rooms[0]?.id || "room-1");
+  const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(cabinets[0]?.id || "cab-llq-01");
   const [activeTab, setActiveTab] = useState<"rack" | "floor" | "table" | "hardware">("rack");
-  const [selectedHostId, setSelectedHostId] = useState<string>("host-1");
+  const [selectedHostId, setSelectedHostId] = useState<string>(hosts[0]?.id || "phy-1");
   const [treeSearch, setTreeSearch] = useState("");
   const [tableSearch, setTableSearch] = useState("");
   const [brandFilter, setBrandFilter] = useState("全部");

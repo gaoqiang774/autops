@@ -167,6 +167,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
           rooms={rooms}
           cabinets={cabinets}
           hosts={hosts}
+          vms={vms}
           switches={switches}
           databases={databases}
           businesses={businesses}
@@ -230,6 +231,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         <ServiceModel 
           businesses={businesses}
           hosts={hosts}
+          vms={vms}
           databases={databases}
           switches={switches}
           rooms={rooms}

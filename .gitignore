@@ -39,3 +39,9 @@ chatgpt_chat_log.txt
 /outputs/
 /work/
 /.npm-cache/
+信息资产台账-v331toAI.xlsx
+excel_inspection.json
+non_server_devices.json
+parsed_all_devices.json
+parsed_assets_summary.json
+scratch_inspect.py
