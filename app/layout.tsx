@@ -3,8 +3,8 @@ import "./globals.css";
 import "./extra.css";
 
 export const metadata: Metadata = {
-  title: "AutoOps天枢",
-  description: "AutoOps天枢智能运维平台",
+  title: "北控伟仕智能运维平台",
+  description: "北控伟仕智能运维平台",
 };
 
 export default function RootLayout({
