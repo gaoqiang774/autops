@@ -26,6 +26,7 @@ import ServiceModel from "./ServiceModel";
 import ProbeManagement from "./ProbeManagement";
 import CredentialManagement from "./CredentialManagement";
 import CmdbDashboard from "./CmdbDashboard";
+import VulnDetection from "./VulnDetection";
 
 interface CmdbModuleProps {
   page: string;
@@ -147,7 +148,17 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         />
       )}
 
-      {/* 4. 网络与负载 */}
+      {/* 4. 漏洞检测 (基于操作系统家族、版本号与内核快速定位受威胁资产) */}
+      {(page === "漏洞检测" || page === "漏洞排查") && (
+        <VulnDetection 
+          projects={projects}
+          hosts={hosts}
+          vms={vms}
+          switches={switches}
+        />
+      )}
+
+      {/* 5. 网络与负载 */}
       {(page === "网络与负载" || page === "网络设备") && (
         <SwitchManagement 
           switches={switches}
