@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.1.1";
+export const APP_VERSION = "1.1.2";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.1.2",
+    date: "2026-09-17",
+    type: "bugfix",
+    title: "修复顶部栏「天枢驾驶舱」按钮文字竖排折行与固定尺寸限制",
+    description: "消除 .account button 全局 34px 固定宽高限制，为「天枢驾驶舱」与管理员按钮配置自适应宽度、防折行规范与现代化质感胶囊外观。"
+  },
   {
     version: "1.1.1",
     date: "2026-09-17",
