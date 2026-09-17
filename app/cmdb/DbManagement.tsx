@@ -61,9 +61,10 @@ export default function DbManagement({
           <h3 style={{ margin: 0, fontSize: 16, color: "#0f172a" }}>🗄 生产数据库资产与拓扑实例</h3>
           <select value={filterType} onChange={e => setFilterType(e.target.value)}>
             <option value="全部">全部引擎类型</option>
+            <option value="Oracle">Oracle RAC 生产数据库</option>
             <option value="MySQL">MySQL 关系型数据库</option>
+            <option value="PostgreSQL">PostgreSQL 数据库</option>
             <option value="Redis">Redis 内存缓存集群</option>
-            <option value="PostgreSQL">PostgreSQL / TimescaleDB</option>
           </select>
         </div>
         <button className="btn-primary" onClick={() => setShowModal(true)}>

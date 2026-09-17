@@ -1,19 +1,17 @@
 "use client";
 import React, { useState } from "react";
-import { SwitchDevice, IdcRoom, IdcCabinet } from "../cmdbData";
+import { SwitchDevice } from "../cmdbData";
 
 interface SwitchManagementProps {
   switches: SwitchDevice[];
-  rooms: IdcRoom[];
-  cabinets: IdcCabinet[];
+  rooms?: any[];
+  cabinets?: any[];
   onAddSwitch: (sw: SwitchDevice) => void;
   onDeleteSwitch: (id: string) => void;
 }
 
 export default function SwitchManagement({
   switches,
-  rooms,
-  cabinets,
   onAddSwitch,
   onDeleteSwitch
 }: SwitchManagementProps) {
@@ -24,14 +22,14 @@ export default function SwitchManagement({
 
   const [form, setForm] = useState({
     name: "",
-    assetNo: `NET-BJ-ACC0${switches.length + 1}`,
-    roomId: rooms[0]?.id || "room-1",
-    cabinetId: cabinets[0]?.id || "cab-llq-01",
-    startU: 42,
-    ip: "10.100.0.15",
-    brand: "华为" as any,
-    model: "CloudEngine 6881-48T6CQ",
-    role: "接入交换机" as any,
+    assetNo: `NET-ACC0${switches.length + 1}`,
+    projectName: "工会职服数智化系统",
+    customerName: "北京市总工会职工服务中心",
+    cloudVendor: "首信云",
+    ip: "172.25.147.252",
+    brand: "锐捷",
+    model: "RG-EG3000G / 高可用SLB",
+    role: "负载均衡设备",
     portCount: 48
   });
 
@@ -42,10 +40,6 @@ export default function SwitchManagement({
       id: `sw-${Date.now()}`,
       assetNo: form.assetNo,
       name: form.name,
-      roomId: form.roomId,
-      cabinetId: form.cabinetId,
-      startU: form.startU,
-      uHeight: 1,
       ip: form.ip,
       brand: form.brand,
       model: form.model,
@@ -53,7 +47,12 @@ export default function SwitchManagement({
       portCount: form.portCount,
       activePorts: Math.round(form.portCount * 0.7),
       status: "online",
-      businessId: "biz-1"
+      businessId: "biz-1",
+      projectName: form.projectName,
+      customerName: form.customerName,
+      cloudVendor: form.cloudVendor,
+      deviceType: "负载均衡",
+      category: "网络"
     };
     onAddSwitch(newSw);
     setSelectedSwitchId(newSw.id);
@@ -65,11 +64,11 @@ export default function SwitchManagement({
       {/* Switch Overview Header */}
       <div className="cmdb-table-filter">
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <h3 style={{ margin: 0, fontSize: 16, color: "#0f172a" }}>🌐 网络设备与交换机拓扑矩阵</h3>
-          <span className="room-badge">{switches.length} 台在网交换机</span>
+          <h3 style={{ margin: 0, fontSize: 16, color: "#0f172a" }}>🌐 网络设备与项目负载均衡拓扑</h3>
+          <span className="room-badge">{switches.length} 台在网设备</span>
         </div>
         <button className="btn-primary" onClick={() => setShowModal(true)}>
-          ＋ 录入网络设备
+          ＋ 录入网络/负载设备
         </button>
       </div>
 
@@ -83,14 +82,14 @@ export default function SwitchManagement({
                   {selectedSwitch.brand}
                 </span>
                 <span style={{ fontSize: 16, fontWeight: 700, color: "#38bdf8" }}>{selectedSwitch.name}</span>
-                <span className="status-pill online">● 设备在线</span>
+                <span className="status-pill online">● 运行正常</span>
               </div>
               <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
-                型号: {selectedSwitch.model} · 管理IP: {selectedSwitch.ip} · 角色: {selectedSwitch.role} · 物理位置: {rooms.find(r => r.id === selectedSwitch.roomId)?.name} ({cabinets.find(c => c.id === selectedSwitch.cabinetId)?.name} · {selectedSwitch.startU}U)
+                型号: {selectedSwitch.model} · 管理/VIP: {selectedSwitch.ip} · 角色: {selectedSwitch.role} · 归属项目: {selectedSwitch.projectName || "通用业务"} ({selectedSwitch.customerName || "北控伟仕"})
               </p>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 11, color: "#94a3b8" }}>活跃端口占比</div>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>活跃链路端口</div>
               <strong style={{ fontSize: 18, color: "#22c55e" }}>
                 {selectedSwitch.activePorts} <small style={{ fontSize: 12, color: "#64748b" }}>/ {selectedSwitch.portCount} Ports</small>
               </strong>
@@ -101,7 +100,7 @@ export default function SwitchManagement({
           <div style={{ background: "#030712", border: "2px solid #334155", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", fontFamily: "monospace" }}>
               <span>PORT MATRIX (GE/10GE SFP+ / 100G QSFP28)</span>
-              <span>100Gbps 上联光口 [P41-P48]</span>
+              <span>100Gbps 上联双光口 [P41-P48]</span>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 4 }}>
@@ -145,30 +144,30 @@ export default function SwitchManagement({
       )}
 
       {/* Switch Table */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginTop: 12 }}>
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginTop: 14 }}>
         <table className="cmdb-data-table">
           <thead>
             <tr>
               <th>资产编号</th>
               <th>设备名称</th>
-              <th>管理 IP</th>
-              <th>厂商与型号</th>
-              <th>角色类型</th>
-              <th>端口配置</th>
-              <th>物理位置 (机房/机柜/U位)</th>
-              <th>运行状态</th>
+              <th>管理 / VIP 地址</th>
+              <th>品牌型号</th>
+              <th>设备角色</th>
+              <th>归属业务项目</th>
+              <th>客户单位</th>
+              <th>端口利用率</th>
+              <th>状态</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {switches.map(s => {
-              const r = rooms.find(room => room.id === s.roomId);
-              const c = cabinets.find(cab => cab.id === s.cabinetId);
+              const isSelected = s.id === selectedSwitchId;
 
               return (
                 <tr 
-                  key={s.id} 
-                  style={{ background: s.id === selectedSwitchId ? "#eff6ff" : "#fff", cursor: "pointer" }}
+                  key={s.id}
+                  style={{ background: isSelected ? "#f8fafc" : "#fff", cursor: "pointer" }}
                   onClick={() => setSelectedSwitchId(s.id)}
                 >
                   <td style={{ fontFamily: "monospace", fontWeight: 600 }}>{s.assetNo}</td>
@@ -176,9 +175,14 @@ export default function SwitchManagement({
                   <td style={{ fontFamily: "monospace", color: "#2563eb" }}>{s.ip}</td>
                   <td>{s.brand} {s.model}</td>
                   <td><span className="room-badge">{s.role}</span></td>
-                  <td>{s.activePorts}/{s.portCount} 活跃</td>
-                  <td>{r?.city} · {c?.name} ({s.startU}U)</td>
-                  <td><span className="status-pill online">● 在线</span></td>
+                  <td style={{ fontWeight: 500, color: "#1e293b" }}>{s.projectName || "通用业务"}</td>
+                  <td style={{ color: "#64748b" }}>{s.customerName || "北控伟仕"}</td>
+                  <td>
+                    <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>
+                      {s.activePorts} / {s.portCount} ({Math.round((s.activePorts / s.portCount) * 100)}%)
+                    </span>
+                  </td>
+                  <td><span className="status-pill online">● 正常</span></td>
                   <td>
                     <button 
                       className="btn-secondary" 
@@ -195,12 +199,12 @@ export default function SwitchManagement({
                       style={{ padding: "3px 8px", fontSize: 11, color: "#ef4444" }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`确定要移除网络设备 ${s.name} 吗？`)) {
+                        if (confirm(`确定要移除设备 ${s.name} 吗？`)) {
                           onDeleteSwitch(s.id);
                         }
                       }}
                     >
-                      下架
+                      移除
                     </button>
                   </td>
                 </tr>
@@ -215,7 +219,7 @@ export default function SwitchManagement({
         <div className="cmdb-modal-mask">
           <form className="cmdb-modal" onSubmit={handleSubmit}>
             <div className="cmdb-modal-header">
-              <h3>🌐 录入网络交换机设备</h3>
+              <h3>🌐 录入网络/负载均衡设备</h3>
               <button type="button" className="cmdb-modal-close" onClick={() => setShowModal(false)}>×</button>
             </div>
             <div className="cmdb-modal-body">
@@ -223,14 +227,14 @@ export default function SwitchManagement({
                 <div className="form-field-item">
                   <label>* 设备名称</label>
                   <input 
-                    placeholder="如：SW-BJ-ACC-03 汇聚交换机" 
+                    placeholder="如：VIP-k8s-apiserver" 
                     value={form.name} 
                     onChange={e => setForm({ ...form, name: e.target.value })} 
                     required 
                   />
                 </div>
                 <div className="form-field-item">
-                  <label>* 管理 IP 地址</label>
+                  <label>* 管理 / VIP 地址</label>
                   <input 
                     value={form.ip} 
                     onChange={e => setForm({ ...form, ip: e.target.value })} 
@@ -241,59 +245,48 @@ export default function SwitchManagement({
 
               <div className="form-field-row">
                 <div className="form-field-item">
-                  <label>* 所属机房</label>
-                  <select 
-                    value={form.roomId} 
-                    onChange={e => setForm({ ...form, roomId: e.target.value })}
-                  >
-                    {rooms.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
+                  <label>* 归属项目名称</label>
+                  <input 
+                    value={form.projectName} 
+                    onChange={e => setForm({ ...form, projectName: e.target.value })} 
+                    required 
+                  />
                 </div>
                 <div className="form-field-item">
-                  <label>* 所属机柜</label>
-                  <select 
-                    value={form.cabinetId} 
-                    onChange={e => setForm({ ...form, cabinetId: e.target.value })}
-                  >
-                    {cabinets.filter(c => c.roomId === form.roomId).map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <label>* 客户单位</label>
+                  <input 
+                    value={form.customerName} 
+                    onChange={e => setForm({ ...form, customerName: e.target.value })} 
+                    required 
+                  />
                 </div>
               </div>
 
               <div className="form-field-row">
                 <div className="form-field-item">
-                  <label>硬件品牌</label>
-                  <select 
-                    value={form.brand} 
-                    onChange={e => setForm({ ...form, brand: e.target.value as any })}
-                  >
-                    <option value="华为">华为 Huawei</option>
-                    <option value="锐捷">锐捷 Ruijie</option>
-                    <option value="思科">思科 Cisco</option>
-                    <option value="华三">新华三 H3C</option>
-                  </select>
+                  <label>品牌与型号</label>
+                  <input 
+                    value={form.model} 
+                    onChange={e => setForm({ ...form, model: e.target.value })} 
+                  />
                 </div>
                 <div className="form-field-item">
-                  <label>网络角色</label>
+                  <label>设备角色</label>
                   <select 
                     value={form.role} 
-                    onChange={e => setForm({ ...form, role: e.target.value as any })}
+                    onChange={e => setForm({ ...form, role: e.target.value })}
                   >
+                    <option value="负载均衡设备">负载均衡设备</option>
                     <option value="核心交换机">核心交换机</option>
                     <option value="汇聚交换机">汇聚交换机</option>
                     <option value="接入交换机">接入交换机</option>
-                    <option value="带外交换机">带外交换机</option>
                   </select>
                 </div>
               </div>
             </div>
             <div className="cmdb-modal-footer">
               <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>取 消</button>
-              <button type="submit" className="btn-primary">确 定 创 建</button>
+              <button type="submit" className="btn-primary">确 定 录 入</button>
             </div>
           </form>
         </div>

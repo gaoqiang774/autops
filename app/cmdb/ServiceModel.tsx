@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { BusinessModel, PhysicalHost, VmHost, DatabaseAsset, SwitchDevice, IdcRoom, IdcCabinet } from "../cmdbData";
+import { BusinessModel, PhysicalHost, VmHost, DatabaseAsset, SwitchDevice } from "../cmdbData";
 
 interface ServiceModelProps {
   businesses: BusinessModel[];
@@ -8,9 +8,9 @@ interface ServiceModelProps {
   vms?: VmHost[];
   databases: DatabaseAsset[];
   switches: SwitchDevice[];
-  rooms: IdcRoom[];
-  cabinets: IdcCabinet[];
-  onJumpToRack?: (roomId: string, cabinetId: string) => void;
+  rooms?: any[];
+  cabinets?: any[];
+  onNavigateToProject?: (projName: string) => void;
 }
 
 export default function ServiceModel({
@@ -19,9 +19,7 @@ export default function ServiceModel({
   vms = [],
   databases,
   switches,
-  rooms,
-  cabinets,
-  onJumpToRack
+  onNavigateToProject
 }: ServiceModelProps) {
   const [selectedBizId, setSelectedBizId] = useState<string>(businesses[0]?.id || "biz-1");
   const [keyword, setKeyword] = useState("");
@@ -31,8 +29,6 @@ export default function ServiceModel({
     type: string;
     detail: string;
     extra?: string;
-    roomId?: string;
-    cabinetId?: string;
   } | null>(null);
 
   // Filter businesses
@@ -57,21 +53,19 @@ export default function ServiceModel({
   }, [vms, selectedBiz]);
 
   const linkedHosts = useMemo(() => {
-    // Hosts directly assigned or hosting linked vms
     const directHosts = hosts.filter(h => h.businessId === selectedBiz.id || h.projectName === selectedBiz.name);
     if (directHosts.length > 0) return directHosts;
-    // Otherwise find hypervisor host of the first linked vm
     const parentHostId = linkedVms[0]?.physicalHostId;
     const parentHost = hosts.find(h => h.id === parentHostId);
     return parentHost ? [parentHost] : [hosts[0]];
   }, [hosts, selectedBiz, linkedVms]);
 
   const linkedDbs = useMemo(() => {
-    return databases.filter(d => d.businessId === selectedBiz.id);
+    return databases.filter(d => d.businessId === selectedBiz.id || d.projectName === selectedBiz.name);
   }, [databases, selectedBiz]);
 
   const linkedSwitches = useMemo(() => {
-    const sws = switches.filter(s => s.businessId === selectedBiz.id);
+    const sws = switches.filter(s => s.businessId === selectedBiz.id || s.projectName === selectedBiz.name);
     return sws.length > 0 ? sws : [switches[0]];
   }, [switches, selectedBiz]);
 
@@ -80,13 +74,13 @@ export default function ServiceModel({
       {/* Top Filter and Business Switcher Header */}
       <div className="cmdb-table-filter" style={{ flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <h3 style={{ margin: 0, fontSize: 16, color: "#0f172a" }}>🏛 业务系统全链路架构拓扑</h3>
-          <span className="room-badge">{businesses.length} 个纳管业务系统</span>
+          <h3 style={{ margin: 0, fontSize: 16, color: "#0f172a" }}>🏛 项目业务全景架构拓扑</h3>
+          <span className="room-badge">{businesses.length} 个业务项目拓扑</span>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input 
-            placeholder="搜索业务系统 / 客户单位 / 编码..." 
+            placeholder="搜索业务项目 / 客户单位 / 编码..." 
             value={keyword}
             onChange={e => setKeyword(e.target.value)}
             style={{ width: 220 }}
@@ -100,7 +94,7 @@ export default function ServiceModel({
         </div>
       </div>
 
-      {/* Horizontal Business Carousel Bar */}
+      {/* Horizontal Business Projects Carousel Bar */}
       <div style={{ 
         display: "flex", 
         gap: 10, 
@@ -142,7 +136,7 @@ export default function ServiceModel({
                 }}>
                   {b.level}
                 </span>
-                <span style={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>健康 {b.healthScore}分</span>
+                <span style={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>健康度 {b.healthScore}分</span>
               </div>
               <h4 style={{ margin: "2px 0 4px", fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {b.name}
@@ -151,7 +145,7 @@ export default function ServiceModel({
                 {b.department}
               </small>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTop: "1px dashed #e2e8f0", fontSize: 10, color: "#475569" }}>
-                <span>关联节点: {devCount || linkedVms.length} 台</span>
+                <span>关联资产: {devCount || linkedVms.length} 台</span>
                 <span style={{ color: "#2563eb" }}>{isSelected ? "● 当前查看" : "点击查看"}</span>
               </div>
             </div>
@@ -165,25 +159,13 @@ export default function ServiceModel({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <h4 style={{ margin: 0, fontSize: 15, color: "#fff" }}>
-                🕸 全链路 5 层架构拓扑：{selectedBiz.name}
+                🕸 项目全链路架构拓扑：{selectedBiz.name}
               </h4>
               <span className="status-pill online" style={{ fontSize: 11 }}>链路全通 · 探针正常</span>
             </div>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
-              业务单位: {selectedBiz.department} · 运维保障组: {selectedBiz.owner} · 系统编码: {selectedBiz.code}
+              客户单位: {selectedBiz.department} · 运维保障组: {selectedBiz.owner} · 系统编码: {selectedBiz.code}
             </p>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button 
-              className="btn-secondary" 
-              style={{ background: "#1e293b", color: "#f8fafc", borderColor: "#334155", fontSize: 11, padding: "4px 10px" }}
-              onClick={() => {
-                const h = linkedHosts[0];
-                if (h) onJumpToRack?.(h.roomId, h.cabinetId);
-              }}
-            >
-              📍 穿透至 42U 机柜立面
-            </button>
           </div>
         </header>
 
@@ -204,7 +186,7 @@ export default function ServiceModel({
                 <div className="topology-node-icon app">🏛</div>
                 <div className="topology-node-meta">
                   <strong>{selectedBiz.name}</strong>
-                  <small>安全等级: {selectedBiz.level} · 生产系统</small>
+                  <small>安全等级: {selectedBiz.level} · 业务系统</small>
                 </div>
               </div>
             </div>
@@ -214,31 +196,24 @@ export default function ServiceModel({
           <div>
             <div className="topology-layer-title">LEVEL 2 · 网络接入与高可用负载层 (GATEWAY & SLB LAYER)</div>
             <div className="topology-nodes-row">
-              {linkedSwitches.map(sw => {
-                const swRoom = rooms.find(r => r.id === sw.roomId);
-                const swCab = cabinets.find(c => c.id === sw.cabinetId);
-
-                return (
-                  <div 
-                    key={sw.id} 
-                    className="topology-node-card"
-                    onClick={() => setInspectedNode({
-                      title: sw.name,
-                      type: "网络 / 负载均衡设备",
-                      detail: `管理IP: ${sw.ip} · 端口总数: ${sw.portCount} (活跃 ${sw.activePorts}) · 角色: ${sw.role}`,
-                      extra: `品牌型号: ${sw.brand} ${sw.model} · 物理位置: ${swRoom?.name} ${swCab?.name}`,
-                      roomId: sw.roomId,
-                      cabinetId: sw.cabinetId
-                    })}
-                  >
-                    <div className="topology-node-icon net">🌐</div>
-                    <div className="topology-node-meta">
-                      <strong>{sw.name}</strong>
-                      <small>{sw.ip} · {sw.role}</small>
-                    </div>
+              {linkedSwitches.map(sw => (
+                <div 
+                  key={sw.id} 
+                  className="topology-node-card"
+                  onClick={() => setInspectedNode({
+                    title: sw.name,
+                    type: "网络 / 负载均衡设备",
+                    detail: `管理IP: ${sw.ip} · 端口总数: ${sw.portCount} (活跃 ${sw.activePorts}) · 角色: ${sw.role}`,
+                    extra: `品牌型号: ${sw.brand} ${sw.model} · 项目专有网络配置`
+                  })}
+                >
+                  <div className="topology-node-icon net">🌐</div>
+                  <div className="topology-node-meta">
+                    <strong>{sw.name}</strong>
+                    <small>{sw.ip} · {sw.role}</small>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -320,35 +295,28 @@ export default function ServiceModel({
             </div>
           </div>
 
-          {/* LAYER 5: PHYSICAL INFRASTRUCTURE & 42U RACK */}
+          {/* LAYER 5: PHYSICAL INFRASTRUCTURE & HYPERVISOR HOSTS */}
           <div>
-            <div className="topology-layer-title">LEVEL 5 · 实体物理基础设施宿主层 (PHYSICAL HYPERVISOR & 42U RACK)</div>
+            <div className="topology-layer-title">LEVEL 5 · 实体物理计算宿主与硬件层 (PHYSICAL HYPERVISOR & HARDWARE)</div>
             <div className="topology-nodes-row">
-              {linkedHosts.map(h => {
-                const room = rooms.find(r => r.id === h.roomId);
-                const cab = cabinets.find(c => c.id === h.cabinetId);
-
-                return (
-                  <div 
-                    key={h.id} 
-                    className="topology-node-card"
-                    onClick={() => setInspectedNode({
-                      title: h.hostname,
-                      type: "物理服务器 / 计算宿主",
-                      detail: `管理IP: ${h.ip} · 带外BMC: ${h.bmcIp} · 硬件: ${h.brand} ${h.model} (${h.cpu})`,
-                      extra: `物理位置: ${room?.name} · ${cab?.name} · U位: ${h.startU}U-${h.startU + h.uHeight - 1}U`,
-                      roomId: h.roomId,
-                      cabinetId: h.cabinetId
-                    })}
-                  >
-                    <div className="topology-node-icon srv">💻</div>
-                    <div className="topology-node-meta">
-                      <strong>{h.hostname}</strong>
-                      <small>{room?.name} · {cab?.name} ({h.startU}U-{h.startU + h.uHeight - 1}U)</small>
-                    </div>
+              {linkedHosts.map(h => (
+                <div 
+                  key={h.id} 
+                  className="topology-node-card"
+                  onClick={() => setInspectedNode({
+                    title: h.hostname,
+                    type: "物理服务器 / 计算宿主",
+                    detail: `管理IP: ${h.ip} · 带外BMC: ${h.bmcIp} · 硬件: ${h.brand} ${h.model} (${h.cpu})`,
+                    extra: `算力规格: ${h.cpu} · 内存: ${h.memory} · 磁盘: ${h.disk}`
+                  })}
+                >
+                  <div className="topology-node-icon srv">💻</div>
+                  <div className="topology-node-meta">
+                    <strong>{h.hostname}</strong>
+                    <small>{h.ip} · {h.brand} {h.model}</small>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -387,17 +355,6 @@ export default function ServiceModel({
           {inspectedNode.extra && (
             <div style={{ background: "#1e293b", padding: 8, borderRadius: 4, fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
               {inspectedNode.extra}
-            </div>
-          )}
-          {inspectedNode.roomId && inspectedNode.cabinetId && (
-            <div style={{ marginTop: 12, textAlign: "right" }}>
-              <button 
-                className="btn-primary" 
-                style={{ fontSize: 11, padding: "4px 8px" }}
-                onClick={() => onJumpToRack?.(inspectedNode.roomId!, inspectedNode.cabinetId!)}
-              >
-                跳转至该机柜 42U 立面图 →
-              </button>
             </div>
           )}
         </div>

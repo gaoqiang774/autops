@@ -1,8 +1,7 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-  initialRooms,
-  initialCabinets,
+  initialProjects,
   initialHosts,
   initialVms,
   initialSwitches,
@@ -10,16 +9,16 @@ import {
   initialBusinesses,
   initialProbes,
   initialCredentials,
-  IdcRoom,
-  IdcCabinet,
+  ProjectGroup,
   PhysicalHost,
   VmHost,
   SwitchDevice,
   DatabaseAsset,
   BusinessModel,
-  CredentialItem
+  CredentialItem,
+  IdcRoom,
+  IdcCabinet
 } from "../cmdbData";
-import IdcManagement from "./IdcManagement";
 import HostManagement from "./HostManagement";
 import SwitchManagement from "./SwitchManagement";
 import DbManagement from "./DbManagement";
@@ -34,9 +33,8 @@ interface CmdbModuleProps {
 }
 
 export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
-  // Shared Centralized Relational State
-  const [rooms, setRooms] = useState<IdcRoom[]>(initialRooms);
-  const [cabinets, setCabinets] = useState<IdcCabinet[]>(initialCabinets);
+  // Centralized State
+  const [projects, setProjects] = useState<ProjectGroup[]>(initialProjects);
   const [hosts, setHosts] = useState<PhysicalHost[]>(initialHosts);
   const [vms, setVms] = useState<VmHost[]>(initialVms);
   const [switches, setSwitches] = useState<SwitchDevice[]>(initialSwitches);
@@ -45,91 +43,47 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
   const [probes, setProbes] = useState(initialProbes);
   const [credentials, setCredentials] = useState(initialCredentials);
 
-  // Recalculate cabinet usedU and power when hosts or switches change
-  function recalculateCabinets(curCabinets: IdcCabinet[], curHosts: PhysicalHost[], curSwitches: SwitchDevice[]) {
-    return curCabinets.map(cab => {
-      const cabHosts = curHosts.filter(h => h.cabinetId === cab.id);
-      const cabSwitches = curSwitches.filter(s => s.cabinetId === cab.id);
-      
-      const usedFromHosts = cabHosts.reduce((acc, h) => acc + h.uHeight, 0);
-      const usedFromSwitches = cabSwitches.reduce((acc, s) => acc + s.uHeight, 0);
-      const totalUsed = usedFromHosts + usedFromSwitches;
-
-      const hostPower = cabHosts.reduce((acc, h) => acc + (h.powerWatts || 300), 0) / 1000;
-      const swPower = cabSwitches.length * 0.25;
-      const totalPower = parseFloat((hostPower + swPower).toFixed(1));
-
-      return {
-        ...cab,
-        usedU: totalUsed,
-        currentPower: totalPower,
-        status: (totalUsed >= 38 ? "预警" : totalUsed > 0 ? "正常" : "空闲") as IdcCabinet["status"]
-      };
-    });
-  }
-
-  // Handlers for Room
-  function handleAddRoom(newRoom: IdcRoom) {
-    setRooms(prev => [...prev, newRoom]);
-  }
-
-  function handleDeleteRoom(roomId: string) {
-    setRooms(prev => prev.filter(r => r.id !== roomId));
-  }
-
-  // Handlers for Cabinet
-  function handleAddCabinet(newCabinet: IdcCabinet) {
-    setCabinets(prev => {
-      const next = [...prev, newCabinet];
-      return recalculateCabinets(next, hosts, switches);
-    });
-  }
-
-  function handleDeleteCabinet(cabId: string) {
-    setCabinets(prev => prev.filter(c => c.id !== cabId));
-  }
-
   // Handlers for Host
   function handleAddHost(newHost: PhysicalHost) {
-    setHosts(prev => {
-      const nextHosts = [...prev, newHost];
-      setCabinets(cabs => recalculateCabinets(cabs, nextHosts, switches));
-      return nextHosts;
-    });
+    setHosts(prev => [...prev, newHost]);
   }
 
   function handleDeleteHost(hostId: string) {
-    setHosts(prev => {
-      const nextHosts = prev.filter(h => h.id !== hostId);
-      setCabinets(cabs => recalculateCabinets(cabs, nextHosts, switches));
-      return nextHosts;
-    });
-  }
-
-  // Handlers for Switch
-  function handleAddSwitch(newSwitch: SwitchDevice) {
-    setSwitches(prev => {
-      const nextSw = [...prev, newSwitch];
-      setCabinets(cabs => recalculateCabinets(cabs, hosts, nextSw));
-      return nextSw;
-    });
-  }
-
-  function handleDeleteSwitch(swId: string) {
-    setSwitches(prev => {
-      const nextSw = prev.filter(s => s.id !== swId);
-      setCabinets(cabs => recalculateCabinets(cabs, hosts, nextSw));
-      return nextSw;
-    });
+    setHosts(prev => prev.filter(h => h.id !== hostId));
   }
 
   // Handlers for VM
   function handleAddVm(newVm: VmHost) {
     setVms(prev => [...prev, newVm]);
+    // update project count
+    setProjects(prev => prev.map(p => {
+      if (p.name === newVm.projectName || p.id === newVm.projectId) {
+        return { ...p, deviceCount: p.deviceCount + 1, vmCount: p.vmCount + 1 };
+      }
+      return p;
+    }));
   }
 
   function handleDeleteVm(vmId: string) {
+    const target = vms.find(v => v.id === vmId);
     setVms(prev => prev.filter(v => v.id !== vmId));
+    if (target) {
+      setProjects(prev => prev.map(p => {
+        if (p.name === target.projectName || p.id === target.projectId) {
+          return { ...p, deviceCount: Math.max(0, p.deviceCount - 1), vmCount: Math.max(0, p.vmCount - 1) };
+        }
+        return p;
+      }));
+    }
+  }
+
+  // Handlers for Switch
+  function handleAddSwitch(newSwitch: SwitchDevice) {
+    setSwitches(prev => [...prev, newSwitch]);
+  }
+
+  function handleDeleteSwitch(swId: string) {
+    setSwitches(prev => prev.filter(s => s.id !== swId));
   }
 
   // Handlers for Database
@@ -150,22 +104,27 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
     setCredentials(prev => prev.filter(c => c.id !== credId));
   }
 
-  // Navigation helpers
-  function handleJumpToRack(roomId: string, cabinetId: string) {
-    onPageChange("机房管理");
-  }
-
-  function handleNavigateToBusiness(bizId: string) {
-    onPageChange("业务模型");
-  }
-
   return (
     <div style={{ padding: "14px 18px", height: "calc(100vh - 63px)", marginLeft: 200, overflowY: "auto", background: "#f1f5f9" }}>
-      {/* Dynamic Sub-View Rendering */}
-      {page === "仪表盘" && (
+      {/* 1. 项目资产 (核心资产管理主工作台，按项目分资产) */}
+      {(page === "项目资产" || page === "主机管理" || page === "机房管理") && (
+        <HostManagement 
+          projects={projects}
+          hosts={hosts}
+          vms={vms}
+          switches={switches}
+          databases={databases}
+          onAddHost={handleAddHost}
+          onDeleteHost={handleDeleteHost}
+          onAddVm={handleAddVm}
+          onDeleteVm={handleDeleteVm}
+        />
+      )}
+
+      {/* 2. 资产大盘 (按项目、客户、云厂商、信创全局指标) */}
+      {(page === "资产大盘" || page === "仪表盘") && (
         <CmdbDashboard 
-          rooms={rooms}
-          cabinets={cabinets}
+          projects={projects}
           hosts={hosts}
           vms={vms}
           switches={switches}
@@ -175,48 +134,31 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         />
       )}
 
-      {page === "机房管理" && (
-        <IdcManagement 
-          rooms={rooms}
-          cabinets={cabinets}
-          hosts={hosts}
-          switches={switches}
+      {/* 3. 业务拓扑 (按项目业务全景拓扑) */}
+      {(page === "业务拓扑" || page === "业务模型") && (
+        <ServiceModel 
           businesses={businesses}
-          onAddRoom={handleAddRoom}
-          onDeleteRoom={handleDeleteRoom}
-          onAddCabinet={handleAddCabinet}
-          onDeleteCabinet={handleDeleteCabinet}
-          onAddHost={handleAddHost}
-          onDeleteHost={handleDeleteHost}
-          onNavigateToBusiness={handleNavigateToBusiness}
-        />
-      )}
-
-      {page === "主机管理" && (
-        <HostManagement 
           hosts={hosts}
           vms={vms}
-          rooms={rooms}
-          cabinets={cabinets}
-          businesses={businesses}
-          onAddHost={handleAddHost}
-          onDeleteHost={handleDeleteHost}
-          onAddVm={handleAddVm}
-          onDeleteVm={handleDeleteVm}
-          onJumpToRack={handleJumpToRack}
+          databases={databases}
+          switches={switches}
+          rooms={[]}
+          cabinets={[]}
         />
       )}
 
-      {page === "网络设备" && (
+      {/* 4. 网络与负载 */}
+      {(page === "网络与负载" || page === "网络设备") && (
         <SwitchManagement 
           switches={switches}
-          rooms={rooms}
-          cabinets={cabinets}
+          rooms={[]}
+          cabinets={[]}
           onAddSwitch={handleAddSwitch}
           onDeleteSwitch={handleDeleteSwitch}
         />
       )}
 
+      {/* 5. 数据库管理 */}
       {page === "数据库管理" && (
         <DbManagement 
           databases={databases}
@@ -227,26 +169,15 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         />
       )}
 
-      {page === "业务模型" && (
-        <ServiceModel 
-          businesses={businesses}
-          hosts={hosts}
-          vms={vms}
-          databases={databases}
-          switches={switches}
-          rooms={rooms}
-          cabinets={cabinets}
-          onJumpToRack={handleJumpToRack}
-        />
-      )}
-
-      {page === "探针管理" && (
+      {/* 6. 探针监控 */}
+      {(page === "探针监控" || page === "探针管理") && (
         <ProbeManagement 
           probes={probes}
           hosts={hosts}
         />
       )}
 
+      {/* 7. 凭据管理 */}
       {page === "凭据管理" && (
         <CredentialManagement 
           credentials={credentials}
@@ -255,33 +186,34 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         />
       )}
 
+      {/* 8. AIops助手 */}
       {page === "AIops助手" && (
         <div className="cmdb-container" style={{ background: "#fff", padding: 20, borderRadius: 8, border: "1px solid #e2e8f0" }}>
-          <h3 style={{ margin: "0 0 10px", color: "#0f172a" }}>✦ 资产与拓扑智能 AI 助手</h3>
+          <h3 style={{ margin: "0 0 10px", color: "#0f172a" }}>✦ 项目资产智能 AI 助手</h3>
           <p style={{ color: "#64748b", fontSize: 13 }}>
-            针对【北控伟仕智能运维平台】全国数据中心、物理机柜、服务器与业务拓扑提供知识问答与快速定位：
+            针对【北控伟仕智能运维平台】24 个重点业务项目、238 台信息资产提供知识问答与快速定位：
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 16 }}>
             <div 
               style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: 14, borderRadius: 8, cursor: "pointer" }}
-              onClick={() => onPageChange("机房管理")}
+              onClick={() => onPageChange("项目资产")}
             >
-              <b style={{ color: "#1d4ed8", display: "block", marginBottom: 6 }}>📍 查询北京亦庄机房 A01 机柜当前在架物理设备</b>
-              <span style={{ fontSize: 12, color: "#475569" }}>立即进入 42U 立面机架图查看 Dell R740 与华为 FusionServer →</span>
+              <b style={{ color: "#1d4ed8", display: "block", marginBottom: 6 }}>📁 查询【原三险系统】13 台计算节点与 Oracle RAC 物理库</b>
+              <span style={{ fontSize: 12, color: "#475569" }}>一键进入项目资产工作台查看 128 核 256G 物理机 db3 与应用集群 →</span>
             </div>
             <div 
               style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: 14, borderRadius: 8, cursor: "pointer" }}
-              onClick={() => onPageChange("业务模型")}
+              onClick={() => onPageChange("业务拓扑")}
             >
-              <b style={{ color: "#15803d", display: "block", marginBottom: 6 }}>🕸 查询「北控水务SCADA系统」支撑设备依赖全景</b>
-              <span style={{ fontSize: 12, color: "#475569" }}>查看涵盖 4 台服务器、2 台核心交换机与主从 MySQL 架构 →</span>
+              <b style={{ color: "#15803d", display: "block", marginBottom: 6 }}>🕸 查询【工会互助保险信息系统】22 台国产信创节点拓扑</b>
+              <span style={{ fontSize: 12, color: "#475569" }}>查看首信云互联网区全链路业务、网关与应用架构 →</span>
             </div>
             <div 
               style={{ background: "#faf5ff", border: "1px solid #e9d5ff", padding: 14, borderRadius: 8, cursor: "pointer" }}
-              onClick={() => onPageChange("主机管理")}
+              onClick={() => onPageChange("资产大盘")}
             >
-              <b style={{ color: "#7e22ce", display: "block", marginBottom: 6 }}>💻 查询全网 4 节点智能探针运行心跳与负载</b>
-              <span style={{ fontSize: 12, color: "#475569" }}>查看 CentOS / Ubuntu / openEuler 系统的 CPU 与内存采集 →</span>
+              <b style={{ color: "#7e22ce", display: "block", marginBottom: 6 }}>📊 查看全网 24 个项目算力核数与存储配额大盘</b>
+              <span style={{ fontSize: 12, color: "#475569" }}>查看联通云、首信云、国企云及信创 OS 宏观占比分布 →</span>
             </div>
           </div>
         </div>
