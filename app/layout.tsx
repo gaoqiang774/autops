@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./extra.css";
+import "./cmdb.css";
 
 export const metadata: Metadata = {
   title: "北控伟仕智能运维平台",
