@@ -103,10 +103,12 @@ export default function VulnDetection({
   const [pageSize, setPageSize] = useState(15);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Detail Modal
+  // Detail Modal & Script Modal
   const [detailAsset, setDetailAsset] = useState<UnifiedAsset | null>(null);
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedIps, setCopiedIps] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(false);
+  const [expandScript, setExpandScript] = useState(false);
 
   // All unified assets
   const allAssets: UnifiedAsset[] = useMemo(() => {
@@ -619,8 +621,27 @@ export default function VulnDetection({
           </span>
         </div>
 
-        {/* Action Buttons: Export & Batch Copy */}
+        {/* Action Buttons: Export, Batch Copy & Emergency CLI Modal */}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            className="btn-secondary"
+            style={{
+              fontSize: 12,
+              padding: "5px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              borderColor: "#38bdf8",
+              color: "#0284c7",
+              background: "#f0f9ff",
+              fontWeight: 600
+            }}
+            onClick={() => setShowScriptModal(true)}
+            title="查看并获取针对当前操作系统的批量应急核验命令（支持Ansible/SSH）"
+          >
+            💻 应急排查命令
+          </button>
+
           <button
             className="btn-secondary"
             style={{ fontSize: 12, padding: "5px 10px", display: "flex", alignItems: "center", gap: 4 }}
@@ -641,16 +662,23 @@ export default function VulnDetection({
         </div>
       </div>
 
-      {/* ================= 5. AFFECTED ASSETS TABLE ================= */}
+      {/* ================= 5. AFFECTED ASSETS TABLE WITH DEDICATED SCROLLBAR ================= */}
       <div style={{
         background: "#fff",
         border: "1px solid #e2e8f0",
         borderRadius: 8,
-        overflowX: "auto",
-        overflowY: "hidden",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
+        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        display: "flex",
+        flexDirection: "column"
       }}>
-        <table className="cmdb-data-table" style={{ minWidth: 1280 }}>
+        {/* Dedicated scrollable table area with visible scrollbars and sticky thead */}
+        <div className="cmdb-table-scroll" style={{
+          maxHeight: "calc(100vh - 410px)",
+          minHeight: 380,
+          border: "none",
+          borderRadius: "8px 8px 0 0"
+        }}>
+          <table className="cmdb-data-table" style={{ minWidth: 1280 }}>
           <thead>
             <tr>
               <th style={{ width: 45 }}>序号</th>
@@ -854,6 +882,7 @@ export default function VulnDetection({
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination Footer */}
         <div style={{
@@ -863,6 +892,7 @@ export default function VulnDetection({
           padding: "8px 16px",
           background: "#f8fafc",
           borderTop: "1px solid #e2e8f0",
+          borderRadius: "0 0 8px 8px",
           fontSize: 12,
           color: "#475569"
         }}>
@@ -904,52 +934,92 @@ export default function VulnDetection({
         </div>
       </div>
 
-      {/* ================= 6. EMERGENCY INSPECTION CLI WORKSPACE ================= */}
+      {/* ================= 6. EMERGENCY INSPECTION CLI TOOLBAR (NON-BLOCKING) ================= */}
       <div style={{
-        background: "#0b1120",
-        border: "1px solid #1e293b",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
         borderRadius: 8,
-        padding: "14px 18px",
-        color: "#f8fafc"
+        padding: "10px 16px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+        flexWrap: "wrap",
+        gap: 8
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ color: "#38bdf8", fontWeight: 700, fontSize: 13 }}>
-              💻 智能运维探针联动 · 批量应急核验命令 (Quick Inspection Script)
-            </span>
-            <span style={{ fontSize: 10, background: "#1e293b", color: "#94a3b8", padding: "1px 6px", borderRadius: 3 }}>
-              支持 Ansible / SSH 批量执行
-            </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 16 }}>💻</span>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <strong style={{ fontSize: 13, color: "#1e293b" }}>
+                智能运维探针联动 · 批量应急核验命令 (Quick Inspection Script)
+              </strong>
+              <span style={{ fontSize: 10, background: "#f1f5f9", color: "#475569", padding: "1px 6px", borderRadius: 3 }}>
+                支持 Ansible / SSH
+              </span>
+              <span style={{ fontSize: 10, background: "#e0f2fe", color: "#0369a1", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>
+                {osFamilyInput.includes("Windows") ? "Windows PowerShell" : "Linux Bash"}
+              </span>
+            </div>
+            <small style={{ color: "#64748b", fontSize: 11, display: "block", marginTop: 2 }}>
+              针对当前筛选的 {matchedAssets.length} 台受影响设备生成内核与软件包排查命令，已收纳至安全抽屉，点击按钮查看或展开预览
+            </small>
           </div>
+        </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 11, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => setShowScriptModal(true)}
+          >
+            ⛶ 弹窗沉浸查看
+          </button>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 11, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => setExpandScript(prev => !prev)}
+          >
+            {expandScript ? "▲ 收起面板" : "▼ 展开预览"}
+          </button>
           <button
             className="btn-primary"
-            style={{ fontSize: 11, padding: "3px 10px" }}
+            style={{ fontSize: 11, padding: "4px 10px" }}
             onClick={() => {
               navigator.clipboard?.writeText?.(inspectionScript);
               setCopiedScript(true);
               setTimeout(() => setCopiedScript(false), 2000);
             }}
           >
-            {copiedScript ? "已复制脚本！" : "一键复制代码"}
+            {copiedScript ? "已复制！" : "一键复制代码"}
           </button>
         </div>
-
-        <pre style={{
-          background: "#030712",
-          border: "1px solid #334155",
-          borderRadius: 6,
-          padding: 12,
-          color: "#4ade80",
-          fontSize: 12,
-          fontFamily: "monospace",
-          margin: 0,
-          whiteSpace: "pre-wrap",
-          lineHeight: 1.5
-        }}>
-          {inspectionScript}
-        </pre>
       </div>
+
+      {expandScript && (
+        <div style={{
+          background: "#0b1120",
+          border: "1px solid #1e293b",
+          borderRadius: 8,
+          padding: "12px 16px",
+          color: "#f8fafc"
+        }}>
+          <pre style={{
+            background: "#030712",
+            border: "1px solid #334155",
+            borderRadius: 6,
+            padding: 12,
+            color: "#4ade80",
+            fontSize: 12,
+            fontFamily: "monospace",
+            margin: 0,
+            whiteSpace: "pre-wrap",
+            lineHeight: 1.5
+          }}>
+            {inspectionScript}
+          </pre>
+        </div>
+      )}
 
       {/* ================= 7. FULL ASSET METADATA MODAL ================= */}
       {detailAsset && (
@@ -1048,6 +1118,98 @@ export default function VulnDetection({
                 }}
               >
                 立即发起漏洞复检
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 8. EMERGENCY SCRIPT INSPECTION MODAL ================= */}
+      {showScriptModal && (
+        <div className="cmdb-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowScriptModal(false); }}>
+          <div className="cmdb-modal-dialog" style={{ maxWidth: 780, width: "90%" }}>
+            <div className="cmdb-modal-header" style={{ background: "#0f172a", borderBottom: "1px solid #334155" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 20 }}>💻</span>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h3 style={{ margin: 0, color: "#fff", fontSize: 16 }}>
+                      批量应急核验排查命令 (Quick Inspection Script)
+                    </h3>
+                    <span style={{ fontSize: 10, background: "#1e293b", color: "#38bdf8", padding: "2px 6px", borderRadius: 3, fontWeight: 600 }}>
+                      支持 Ansible / 堡垒机
+                    </span>
+                  </div>
+                  <small style={{ color: "#94a3b8", display: "block", marginTop: 3 }}>
+                    系统类别: <strong style={{ color: "#e2e8f0" }}>{osFamilyInput.includes("Windows") ? "Windows Server" : (osFamilyInput || "Linux / CentOS / 信创系统")}</strong> · 已关联 {matchedAssets.length} 台受影响目标设备
+                  </small>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="cmdb-modal-close"
+                style={{ color: "#fff" }}
+                onClick={() => setShowScriptModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="cmdb-modal-body" style={{ padding: "16px 20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>
+                    执行脚本代码 ({osFamilyInput.includes("Windows") ? "PowerShell" : "Linux Bash"}):
+                  </span>
+                </div>
+                <button
+                  className="btn-primary"
+                  style={{ fontSize: 12, padding: "4px 14px", display: "flex", alignItems: "center", gap: 6 }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText?.(inspectionScript);
+                    setCopiedScript(true);
+                    setTimeout(() => setCopiedScript(false), 2000);
+                  }}
+                >
+                  {copiedScript ? "✓ 已复制到剪贴板！" : "📋 一键复制代码"}
+                </button>
+              </div>
+
+              <pre style={{
+                background: "#030712",
+                border: "1px solid #334155",
+                borderRadius: 6,
+                padding: 14,
+                color: "#4ade80",
+                fontSize: 12,
+                fontFamily: "Consolas, Menlo, Monaco, monospace",
+                margin: 0,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6
+              }}>
+                {inspectionScript}
+              </pre>
+
+              <div style={{ marginTop: 14, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "12px 14px", fontSize: 12, color: "#475569" }}>
+                <strong style={{ color: "#0f172a", display: "block", marginBottom: 6 }}>💡 应急批量执行与处置流程：</strong>
+                <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
+                  <li>在列表工具栏点击<strong>【📋 复制全部IP清单】</strong>，获取当前已筛查定位出的 {matchedAssets.length} 台设备业务内网 IP；</li>
+                  <li>通过 JumpServer 堡垒机命令批量下发或 Ansible Ad-hoc 任务批量执行此核查脚本；</li>
+                  <li>检查关键组件版本（OpenSSH / Sudo / Polkit / Kernel）及补丁安装状态，针对公网暴露资产优先部署防火墙安全策略封堵。</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="cmdb-modal-footer" style={{ padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "#64748b" }}>
+                命令生成于客户端 · 不对生产主机造成破坏性改动
+              </span>
+              <button
+                className="btn-secondary"
+                style={{ padding: "5px 18px", fontSize: 12 }}
+                onClick={() => setShowScriptModal(false)}
+              >
+                关闭
               </button>
             </div>
           </div>

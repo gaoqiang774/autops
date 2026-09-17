@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.1.1";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.1.1",
+    date: "2026-09-17",
+    type: "bugfix",
+    title: "漏洞检测表格滚动条修复与探针脚本视线遮挡优化",
+    description: "受影响设备清单表格增加独立纵横双向滚动条与表头固定(Sticky Header)；将遮挡视线的常驻黑框重构为工具栏【应急核验命令】弹窗与底部轻量折叠面板，彻底释放数据可视空间。"
+  },
   {
     version: "1.1.0",
     date: "2026-09-17",
