@@ -161,7 +161,7 @@ export default function CmdbDashboard({
             </button>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 460, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 480, overflowY: "auto", paddingRight: 6 }}>
             {topProjects.map((p, idx) => {
               const maxCount = topProjects[0]?.deviceCount || 34;
               const barPct = Math.round((p.deviceCount / maxCount) * 100);

@@ -97,13 +97,13 @@ export default function SwitchManagement({
           </div>
 
           {/* 48-Port Visual Grid */}
-          <div style={{ background: "#030712", border: "2px solid #334155", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", fontFamily: "monospace" }}>
+          <div style={{ background: "#030712", border: "2px solid #334155", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", fontFamily: "monospace", minWidth: 680 }}>
               <span>PORT MATRIX (GE/10GE SFP+ / 100G QSFP28)</span>
               <span>100Gbps 上联双光口 [P41-P48]</span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 4, minWidth: 680 }}>
               {Array.from({ length: selectedSwitch.portCount }).map((_, idx) => {
                 const portNo = idx + 1;
                 const isUplink = portNo > selectedSwitch.portCount - 8;
@@ -144,8 +144,8 @@ export default function SwitchManagement({
       )}
 
       {/* Switch Table */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginTop: 14 }}>
-        <table className="cmdb-data-table">
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflowX: "auto", overflowY: "hidden", marginTop: 14 }}>
+        <table className="cmdb-data-table" style={{ minWidth: 900 }}>
           <thead>
             <tr>
               <th>资产编号</th>

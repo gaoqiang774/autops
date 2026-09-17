@@ -233,11 +233,11 @@ export default function HostManagement({
   }
 
   return (
-    <div className="cmdb-container" style={{ display: "flex", gap: 14, height: "calc(100vh - 90px)", paddingBottom: 0 }}>
+    <div className="cmdb-container" style={{ display: "flex", flexDirection: "row", gap: 14, height: "calc(100vh - 90px)", paddingBottom: 0, alignItems: "stretch" }}>
       {/* ================= LEFT SIDEBAR: PROJECTS LIST ================= */}
       <div style={{
-        width: 310,
-        minWidth: 310,
+        width: 290,
+        minWidth: 290,
         background: "#fff",
         border: "1px solid #e2e8f0",
         borderRadius: 8,
@@ -333,7 +333,9 @@ export default function HostManagement({
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    maxWidth: 180
+                    flex: 1,
+                    minWidth: 0,
+                    marginRight: 8
                   }}>
                     {proj.name}
                   </span>

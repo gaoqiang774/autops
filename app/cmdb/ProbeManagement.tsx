@@ -28,11 +28,11 @@ export default function ProbeManagement({ probes, hosts }: ProbeManagementProps)
           </span>
         </div>
 
-        <div style={{ background: "#0f172a", borderRadius: 6, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <code style={{ color: "#38bdf8", fontSize: 12, fontFamily: "monospace" }}>{installCmd}</code>
+        <div style={{ background: "#0f172a", borderRadius: 6, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <code style={{ color: "#38bdf8", fontSize: 12, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 260 }}>{installCmd}</code>
           <button 
             className="btn-primary" 
-            style={{ padding: "4px 12px", fontSize: 11 }}
+            style={{ padding: "4px 12px", fontSize: 11, flexShrink: 0 }}
             onClick={() => {
               navigator.clipboard?.writeText?.(installCmd);
               setCopied(true);
@@ -45,8 +45,8 @@ export default function ProbeManagement({ probes, hosts }: ProbeManagementProps)
       </div>
 
       {/* Probes Table */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-        <table className="cmdb-data-table">
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflowX: "auto", overflowY: "hidden" }}>
+        <table className="cmdb-data-table" style={{ minWidth: 880 }}>
           <thead>
             <tr>
               <th>主机名称</th>

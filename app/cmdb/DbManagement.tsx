@@ -73,8 +73,8 @@ export default function DbManagement({
       </div>
 
       {/* Database Table */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-        <table className="cmdb-data-table">
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflowX: "auto", overflowY: "hidden" }}>
+        <table className="cmdb-data-table" style={{ minWidth: 960 }}>
           <thead>
             <tr>
               <th>数据库实例名称</th>
