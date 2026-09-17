@@ -1,0 +1,1 @@
+export async function GET(request:Request){const ok=(request.headers.get("cookie")||"").includes("autoops_session=admin");return Response.json({ok,user:ok?{account:"admin",name:"管理员"}:null},{status:ok?200:401})}
