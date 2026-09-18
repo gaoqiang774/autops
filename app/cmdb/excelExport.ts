@@ -88,22 +88,13 @@ export function exportAssetsToExcel(
   assets: (AssetMeta | PhysicalHost | VmHost | SwitchDevice)[],
   scopeTitle: string = "全量项目"
 ) {
-  // Construct Multi-layer Header strictly matching 《信息资产台账-v340.xlsx》 02-硬件设备
-  const row1 = [null, null, "02-硬件设备  ·  服务器 / 存储 / 网络同表，用「设备大类」区分"];
-  const row2 = [null, null, "浅黄列=必填 · 表头分区：蓝=基本 / 青绿=网络 / 琥珀=资源 / 绿=操作系统 · 枚举只从「代码表」下拉，禁止手打新词"];
-  const row3 = [
-    null, null, "基本信息", null, null, null, null, null, null, null, null,
-    "网络信息", null, null, null, null, null,
-    "资源信息", null, null, null, null, null, null,
-    "操作系统信息", null, null, null, null,
-    "其他"
-  ];
-  const row4 = HW_EXCEL_HEADERS;
+  // 表头行：只保留标准 30 项列名表头（无需前 3 行说明与分区栏）
+  const headerRow = HW_EXCEL_HEADERS;
 
   // Data rows
   const dataRows = assets.map((item, idx) => assetToExcelRow(item, idx));
 
-  const allRows = [row1, row2, row3, row4, ...dataRows];
+  const allRows = [headerRow, ...dataRows];
 
   // Build sheet
   const ws = XLSX.utils.aoa_to_sheet(allRows);

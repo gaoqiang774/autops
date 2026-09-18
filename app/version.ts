@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.3.0";
+export const APP_VERSION = "1.3.1";
 
 export interface VersionRecord {
   version: string;
@@ -19,11 +19,18 @@ export interface VersionRecord {
 
 export const VERSION_HISTORY: VersionRecord[] = [
   {
+    version: "1.3.1",
+    date: "2026-09-18",
+    type: "bugfix",
+    title: "优化 Excel 导出表头结构（去除前三行说明，仅保留一行纯净标准表头）",
+    description: "按照用户需求简化导出的「02-硬件设备」Excel 表格结构，移除前3行汇总说明与分区行，第1行即为30项标准列名表头，第2行起直接填充数据，兼容纯净格式导出及与导入体系的双向互通。"
+  },
+  {
     version: "1.3.0",
     date: "2026-09-18",
     type: "module",
     title: "新增项目总览与项目内「02硬件」标准格式 Excel 导入与导出模块",
-    description: "在项目总览与每个独立项目中全面新增「📥 导入台账」与「📤 导出Excel (02硬件格式)」功能；导出严格对齐《信息资产台账-v340.xlsx》「02-硬件设备」sheet 的前4行分区表头与30列标准字段，支持按当前筛选搜索结果精准导出；导入支持拖拽上传、智能识别工作表、字段映射校验与预览入库。"
+    description: "在项目总览与每个独立项目中全面新增「📥 导入台账」与「📤 导出Excel (02硬件格式)」功能；导出严格对齐《信息资产台账-v340.xlsx》「02-硬件设备」sheet 的30列标准字段，支持按当前筛选搜索结果精准导出；导入支持拖拽上传、智能识别工作表、字段映射校验与预览入库。"
   },
   {
     version: "1.2.2",
