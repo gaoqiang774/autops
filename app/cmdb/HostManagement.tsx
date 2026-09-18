@@ -819,20 +819,21 @@ export default function HostManagement({
           padding: "12px 18px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{
                   background: "#2563eb",
                   color: "#fff",
                   fontSize: 12,
                   padding: "2px 8px",
                   borderRadius: 4,
-                  fontWeight: 600
+                  fontWeight: 600,
+                  whiteSpace: "nowrap"
                 }}>
                   {currentProject ? currentProject.code : "ALL-ASSETS"}
                 </span>
-                <h3 style={{ margin: 0, fontSize: 17, color: "#0f172a" }}>
+                <h3 style={{ margin: 0, fontSize: 17, color: "#0f172a", whiteSpace: "nowrap" }}>
                   {currentProject ? currentProject.name : "跨项目全量资产台账总表"}
                 </h3>
                 {currentProject && (
@@ -841,13 +842,14 @@ export default function HostManagement({
                     color: currentProject.env === "生产" ? "#15803d" : "#475569",
                     fontSize: 11,
                     padding: "1px 6px",
-                    borderRadius: 4
+                    borderRadius: 4,
+                    whiteSpace: "nowrap"
                   }}>
                     {currentProject.env}环境
                   </span>
                 )}
               </div>
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
                 {currentProject 
                   ? `客户单位: ${currentProject.customerName} · 承载云厂商: ${currentProject.cloudVendor} (${currentProject.regionName})`
                   : "汇聚 24 个项目单位 · 覆盖联通云、首信云、国企云、太极云、阿里云等混合云算力资源"
@@ -922,7 +924,9 @@ export default function HostManagement({
                   fontWeight: 600,
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 5
+                  gap: 5,
+                  whiteSpace: "nowrap",
+                  flexShrink: 0
                 }}
                 title={currentProject ? `导入 Excel 资产到【${currentProject.name}】` : "批量导入《信息资产台账》Excel 资产"}
               >
@@ -943,7 +947,9 @@ export default function HostManagement({
                   fontWeight: 600,
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 5
+                  gap: 5,
+                  whiteSpace: "nowrap",
+                  flexShrink: 0
                 }}
                 title={`按照《信息资产台账-v340.xlsx》02硬件规范导出当前查询的 ${displayedAssets.length} 台资产`}
               >
@@ -967,7 +973,9 @@ export default function HostManagement({
                   fontWeight: 600,
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 5
+                  gap: 5,
+                  whiteSpace: "nowrap",
+                  flexShrink: 0
                 }}
                 title="快速检索单个或批量比对多个 IP 地址并定位所属项目与资产"
               >
@@ -975,7 +983,7 @@ export default function HostManagement({
                 <span>IP地址查询</span>
               </button>
 
-              <button className="btn-primary" onClick={() => setShowAddModal(true)} style={{ padding: "8px 12px" }}>
+              <button className="btn-primary" onClick={() => setShowAddModal(true)} style={{ padding: "8px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
                 ＋ 录入项目资产
               </button>
             </div>
@@ -2919,8 +2927,8 @@ export default function HostManagement({
 
       {/* ================= MODAL: IP ADDRESS QUERY & BATCH LOOKUP ================= */}
       {showIpModal && (
-        <div className="cmdb-modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="cmdb-modal-content" style={{ width: 850, maxWidth: "95vw", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <div className="cmdb-modal-mask" style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.65)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="cmdb-modal" style={{ width: 850, maxWidth: "95vw", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div className="cmdb-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", padding: "14px 20px" }}>
               <h3 style={{ margin: 0, fontSize: 16, display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
                 <span>🌐</span>

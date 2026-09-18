@@ -1194,8 +1194,8 @@ export default function VulnDetection({
 
       {/* ================= 7. FULL ASSET METADATA MODAL ================= */}
       {detailAsset && (
-        <div className="cmdb-modal-overlay">
-          <div className="cmdb-modal-dialog" style={{ maxWidth: 880, width: "92%" }}>
+        <div className="cmdb-modal-mask" style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.65)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="cmdb-modal" style={{ maxWidth: 880, width: "92%" }}>
             <div className="cmdb-modal-header" style={{ background: "#0f172a", borderBottom: "1px solid #334155" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1297,8 +1297,8 @@ export default function VulnDetection({
 
       {/* ================= 8. EMERGENCY SCRIPT INSPECTION MODAL ================= */}
       {showScriptModal && (
-        <div className="cmdb-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowScriptModal(false); }}>
-          <div className="cmdb-modal-dialog" style={{ maxWidth: 780, width: "90%" }}>
+        <div className="cmdb-modal-mask" style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.65)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setShowScriptModal(false); }}>
+          <div className="cmdb-modal" style={{ maxWidth: 780, width: "90%" }}>
             <div className="cmdb-modal-header" style={{ background: "#0f172a", borderBottom: "1px solid #334155" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 20 }}>💻</span>
@@ -1389,8 +1389,8 @@ export default function VulnDetection({
 
       {/* ================= MODAL: VULNERABILITY IP ANALYSIS & LOOKUP ================= */}
       {showVulnIpModal && (
-        <div className="cmdb-modal-overlay" style={{ zIndex: 9999 }}>
-          <div className="cmdb-modal-content" style={{ width: 880, maxWidth: "95vw", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <div className="cmdb-modal-mask" style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.65)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="cmdb-modal" style={{ width: 880, maxWidth: "95vw", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div className="cmdb-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", padding: "14px 20px" }}>
               <h3 style={{ margin: 0, fontSize: 16, display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
                 <span>🛡️</span>
