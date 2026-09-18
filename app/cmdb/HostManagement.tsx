@@ -123,17 +123,6 @@ export default function HostManagement({
     );
   }, [detailAsset, channelList]);
 
-  // Project-level VPN & Links
-  const currentProjectVpn = useMemo(() => {
-    if (!currentProject) return null;
-    return channelList.find(c => c.channelType === "vpn" && (c.projectId === currentProject.id || c.projectName === currentProject.name));
-  }, [currentProject, channelList]);
-
-  const currentProjectWebLinks = useMemo(() => {
-    if (!currentProject) return [];
-    return channelList.filter(c => c.channelType === "web_link" && (c.projectId === currentProject.id || c.projectName === currentProject.name));
-  }, [currentProject, channelList]);
-
   // Unique customers for project sidebar filter
   const customerOptions = useMemo(() => {
     const set = new Set<string>();
@@ -158,6 +147,17 @@ export default function HostManagement({
     if (selectedProjectId === "all") return null;
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
+
+  // Project-level VPN & Links
+  const currentProjectVpn = useMemo(() => {
+    if (!currentProject) return null;
+    return channelList.find(c => c.channelType === "vpn" && (c.projectId === currentProject.id || c.projectName === currentProject.name));
+  }, [currentProject, channelList]);
+
+  const currentProjectWebLinks = useMemo(() => {
+    if (!currentProject) return [];
+    return channelList.filter(c => c.channelType === "web_link" && (c.projectId === currentProject.id || c.projectName === currentProject.name));
+  }, [currentProject, channelList]);
 
   // Filtered assets for current project and right table filters
   const displayedAssets = useMemo(() => {
