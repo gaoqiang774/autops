@@ -2302,13 +2302,6 @@ export default function HostManagement({
             </div>
 
             <div className="cmdb-modal-footer">
-              <button 
-                type="button" 
-                className="btn-primary" 
-                onClick={() => alert(`已拉取节点 [${detailAsset.name}] 实时监控数据！`)}
-              >
-                实时探针遥测
-              </button>
               <button type="button" className="btn-secondary" onClick={() => setDetailAsset(null)}>关 闭</button>
             </div>
           </div>

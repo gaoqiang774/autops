@@ -214,7 +214,7 @@ export default function ServiceModel({
               </h2>
 
               <span className="status-pill online" style={{ fontSize: 11, padding: "2px 8px" }}>
-                ● 全链路架构通畅 · 探针正常
+                ● 全链路架构通畅 · 运行正常
               </span>
 
               <span style={{ fontSize: 11, color: "#38bdf8", background: "rgba(56,189,248,0.15)", padding: "2px 8px", borderRadius: 4 }}>

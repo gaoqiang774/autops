@@ -1127,7 +1127,7 @@ export default function VulnDetection({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <strong style={{ fontSize: 13, color: "#1e293b" }}>
-                智能运维探针联动 · 批量应急核验命令 (Quick Inspection Script)
+                智能运维批量应急核验命令 (Quick Inspection Script)
               </strong>
               <span style={{ fontSize: 10, background: "#f1f5f9", color: "#475569", padding: "1px 6px", borderRadius: 3 }}>
                 支持 Ansible / SSH
@@ -1288,7 +1288,7 @@ export default function VulnDetection({
                 type="button"
                 className="btn-primary"
                 onClick={() => {
-                  alert(`已成功针对设备 [${detailAsset.name}] 触发智能探针深度巡检与漏洞核查任务！`);
+                  alert(`已成功针对设备 [${detailAsset.name}] 触发深度巡检与漏洞核查任务！`);
                   setDetailAsset(null);
                 }}
               >

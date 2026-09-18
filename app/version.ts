@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.6.0";
+export const APP_VERSION = "1.7.0";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.7.0",
+    date: "2026-09-18",
+    type: "module",
+    title: "系统精简瘦身与品牌全新升级（移除探针/天枢驾驶舱/冗余功能，升级看门狗Logo）",
+    description: "全面精简系统架构并升级品牌形象：1. 完全移除探针相关功能、监控代码与遥测接口；2. 移除天枢驾驶舱大屏与切换入口；3. 移除数据库管理、网络与负载、探针监控菜单与模块；4. 顶部栏与登录页全面升级为看门狗品牌 Logo (lookdoordog.jpg)；5. 平台导航按钮与导航中心正式更名为「运维信息资产管理」。"
+  },
   {
     version: "1.6.0",
     date: "2026-09-18",

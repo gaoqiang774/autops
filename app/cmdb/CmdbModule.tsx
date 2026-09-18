@@ -5,17 +5,12 @@ import {
   initialHosts,
   initialVms,
   initialSwitches,
-  initialDatabases,
-  initialBusinesses,
-  initialProbes,
-  initialCredentials,
   initialSoftwareComponents,
   initialOpsChannels,
   ProjectGroup,
   PhysicalHost,
   VmHost,
   SwitchDevice,
-  DatabaseAsset,
   BusinessModel,
   CredentialItem,
   SoftwareComponent,
@@ -24,10 +19,7 @@ import {
   IdcCabinet
 } from "../cmdbData";
 import HostManagement from "./HostManagement";
-import SwitchManagement from "./SwitchManagement";
-import DbManagement from "./DbManagement";
 import ServiceModel from "./ServiceModel";
-import ProbeManagement from "./ProbeManagement";
 import CredentialManagement from "./CredentialManagement";
 import CmdbDashboard from "./CmdbDashboard";
 import VulnDetection from "./VulnDetection";
@@ -45,9 +37,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
   const [hosts, setHosts] = useState<PhysicalHost[]>(initialHosts);
   const [vms, setVms] = useState<VmHost[]>(initialVms);
   const [switches, setSwitches] = useState<SwitchDevice[]>(initialSwitches);
-  const [databases, setDatabases] = useState<DatabaseAsset[]>(initialDatabases);
   const [businesses, setBusinesses] = useState<BusinessModel[]>(initialBusinesses);
-  const [probes, setProbes] = useState(initialProbes);
   const [credentials, setCredentials] = useState(initialCredentials);
   const [softwareList, setSoftwareList] = useState<SoftwareComponent[]>(initialSoftwareComponents);
   const [channelList, setChannelList] = useState<OpsChannel[]>(initialOpsChannels);
@@ -282,23 +272,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
     }, 0);
   }
 
-  // Handlers for Switch
-  function handleAddSwitch(newSwitch: SwitchDevice) {
-    setSwitches(prev => [...prev, newSwitch]);
-  }
 
-  function handleDeleteSwitch(swId: string) {
-    setSwitches(prev => prev.filter(s => s.id !== swId));
-  }
-
-  // Handlers for Database
-  function handleAddDb(newDb: DatabaseAsset) {
-    setDatabases(prev => [...prev, newDb]);
-  }
-
-  function handleDeleteDb(dbId: string) {
-    setDatabases(prev => prev.filter(d => d.id !== dbId));
-  }
 
   // Handlers for Credential
   function handleAddCredential(newCred: CredentialItem) {
@@ -373,35 +347,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         />
       )}
 
-      {/* 5. 网络与负载 */}
-      {(page === "网络与负载" || page === "网络设备") && (
-        <SwitchManagement 
-          switches={switches}
-          rooms={[]}
-          cabinets={[]}
-          onAddSwitch={handleAddSwitch}
-          onDeleteSwitch={handleDeleteSwitch}
-        />
-      )}
 
-      {/* 5. 数据库管理 */}
-      {page === "数据库管理" && (
-        <DbManagement 
-          databases={databases}
-          hosts={hosts}
-          businesses={businesses}
-          onAddDb={handleAddDb}
-          onDeleteDb={handleDeleteDb}
-        />
-      )}
-
-      {/* 6. 探针监控 */}
-      {(page === "探针监控" || page === "探针管理") && (
-        <ProbeManagement 
-          probes={probes}
-          hosts={hosts}
-        />
-      )}
 
       {/* 7. 凭据管理 */}
       {page === "凭据管理" && (
@@ -417,7 +363,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
         <div className="cmdb-container" style={{ background: "#fff", padding: 20, borderRadius: 8, border: "1px solid #e2e8f0" }}>
           <h3 style={{ margin: "0 0 10px", color: "#0f172a" }}>✦ 项目资产智能 AI 助手</h3>
           <p style={{ color: "#64748b", fontSize: 13 }}>
-            针对【北控伟仕智能运维平台】24 个重点业务项目、238 台信息资产提供知识问答与快速定位：
+            针对【运维信息资产管理平台】24 个重点业务项目、292 台信息资产提供知识问答与快速定位：
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 16 }}>
             <div 

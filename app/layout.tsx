@@ -4,8 +4,8 @@ import "./extra.css";
 import "./cmdb.css";
 
 export const metadata: Metadata = {
-  title: "北控伟仕智能运维平台",
-  description: "北控伟仕智能运维平台",
+  title: "运维信息资产管理平台",
+  description: "运维信息资产管理平台",
 };
 
 export default function RootLayout({

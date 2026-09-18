@@ -7,7 +7,7 @@ interface CmdbDashboardProps {
   hosts: PhysicalHost[];
   vms?: VmHost[];
   switches: SwitchDevice[];
-  databases: DatabaseAsset[];
+  databases?: DatabaseAsset[];
   businesses: BusinessModel[];
   onNavigate: (menuName: string) => void;
   onSelectProject?: (projId: string) => void;
@@ -18,7 +18,7 @@ export default function CmdbDashboard({
   hosts,
   vms = [],
   switches,
-  databases,
+  databases = [],
   businesses,
   onNavigate,
   onSelectProject
@@ -89,11 +89,11 @@ export default function CmdbDashboard({
           </div>
         </div>
 
-        <div className="kpi-card" onClick={() => onNavigate("数据库管理")} style={{ cursor: "pointer" }}>
-          <div className="kpi-icon gold">🗄</div>
+        <div className="kpi-card" onClick={() => onNavigate("漏洞检测")} style={{ cursor: "pointer" }}>
+          <div className="kpi-icon red" style={{ color: "#dc2626" }}>🛡️</div>
           <div className="kpi-body">
-            <span className="kpi-title">生产数据库集群</span>
-            <span className="kpi-value">{databases.length} <small>个高可用实例</small></span>
+            <span className="kpi-title">操作系统漏洞排查</span>
+            <span className="kpi-value">秒级核验 <small>信创与全网OS风险</small></span>
           </div>
         </div>
 
@@ -139,7 +139,7 @@ export default function CmdbDashboard({
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
           <span style={{ fontSize: 11, color: "#64748b", display: "block" }}>多云协同环境运行率</span>
           <strong style={{ fontSize: 20, color: "#15803d" }}>100% <small style={{ fontSize: 12, fontWeight: 400 }}>在线正常</small></strong>
-          <small style={{ color: "#16a34a", display: "block", marginTop: 4 }}>探针双向心跳遥测健康</small>
+          <small style={{ color: "#16a34a", display: "block", marginTop: 4 }}>全网节点双向状态健康</small>
         </div>
       </div>
 
