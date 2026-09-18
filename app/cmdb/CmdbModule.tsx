@@ -6,6 +6,7 @@ import {
   initialVms,
   initialSwitches,
   initialBusinesses,
+  initialDatabases,
   initialCredentials,
   initialSoftwareComponents,
   initialOpsChannels,
@@ -13,6 +14,7 @@ import {
   PhysicalHost,
   VmHost,
   SwitchDevice,
+  DatabaseAsset,
   BusinessModel,
   CredentialItem,
   SoftwareComponent,
@@ -39,6 +41,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
   const [hosts, setHosts] = useState<PhysicalHost[]>(initialHosts);
   const [vms, setVms] = useState<VmHost[]>(initialVms);
   const [switches, setSwitches] = useState<SwitchDevice[]>(initialSwitches);
+  const [databases] = useState<DatabaseAsset[]>(initialDatabases);
   const [businesses, setBusinesses] = useState<BusinessModel[]>(initialBusinesses);
   const [credentials, setCredentials] = useState(initialCredentials);
   const [softwareList, setSoftwareList] = useState<SoftwareComponent[]>(initialSoftwareComponents);
