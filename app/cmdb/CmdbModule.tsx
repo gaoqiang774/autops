@@ -31,6 +31,8 @@ import ProbeManagement from "./ProbeManagement";
 import CredentialManagement from "./CredentialManagement";
 import CmdbDashboard from "./CmdbDashboard";
 import VulnDetection from "./VulnDetection";
+import { getAssetKey } from "./excelExport";
+import { ImportStrategy } from "./ImportModal";
 
 interface CmdbModuleProps {
   page: string;
@@ -102,25 +104,146 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
     }
   }
 
-  function handleBatchImportAssets(newAssets: (VmHost & { isImported?: boolean })[]) {
-    setVms(prev => [...newAssets, ...prev]);
-    // Recalculate or increment project counts
-    const projCounts: Record<string, number> = {};
-    newAssets.forEach(a => {
-      const p = a.projectName || "未分类项目";
-      projCounts[p] = (projCounts[p] || 0) + 1;
-    });
+  // Recalculate all project statistics dynamically based on current unique devices
+  function recalculateProjectStats(updatedVms: VmHost[], updatedHosts: PhysicalHost[], updatedSwitches: SwitchDevice[]) {
+    const projMap: Record<string, { total: number; phy: number; vm: number; net: number; cores: number; mem: number; disk: number; xc: number }> = {};
+
+    for (const v of updatedVms) {
+      const p = v.projectName || "未分类项目";
+      if (!projMap[p]) projMap[p] = { total: 0, phy: 0, vm: 0, net: 0, cores: 0, mem: 0, disk: 0, xc: 0 };
+      projMap[p].total++;
+      projMap[p].vm++;
+      projMap[p].cores += v.cpuCores || 0;
+      projMap[p].mem += v.memoryGb || 0;
+      projMap[p].disk += (v.systemDiskGb || 0) + (v.dataDiskGb || 0);
+      if (v.isXinchuang === "是") projMap[p].xc++;
+    }
+
+    for (const h of updatedHosts) {
+      const p = h.projectName || "未分类项目";
+      if (!projMap[p]) projMap[p] = { total: 0, phy: 0, vm: 0, net: 0, cores: 0, mem: 0, disk: 0, xc: 0 };
+      projMap[p].total++;
+      projMap[p].phy++;
+      projMap[p].cores += h.cpuCores || 0;
+      projMap[p].mem += h.memoryGb || 0;
+      projMap[p].disk += (h.systemDiskGb || 0) + (h.dataDiskGb || 0);
+      if (h.isXinchuang === "是") projMap[p].xc++;
+    }
+
+    for (const s of updatedSwitches) {
+      const p = s.projectName || "未分类项目";
+      if (!projMap[p]) projMap[p] = { total: 0, phy: 0, vm: 0, net: 0, cores: 0, mem: 0, disk: 0, xc: 0 };
+      projMap[p].total++;
+      projMap[p].net++;
+      if (s.isXinchuang === "是") projMap[p].xc++;
+    }
+
     setProjects(prev => prev.map(p => {
-      const extra = projCounts[p.name] || 0;
-      if (extra > 0) {
+      const st = projMap[p.name];
+      if (st) {
         return {
           ...p,
-          deviceCount: p.deviceCount + extra,
-          vmCount: p.vmCount + extra
+          deviceCount: st.total,
+          phyCount: st.phy,
+          vmCount: st.vm,
+          netCount: st.net,
+          totalCores: st.cores,
+          totalMemoryGb: st.mem,
+          totalDiskGb: st.disk,
+          xinchuangCount: st.xc
         };
       }
-      return p;
+      return {
+        ...p,
+        deviceCount: 0,
+        phyCount: 0,
+        vmCount: 0,
+        netCount: 0
+      };
     }));
+  }
+
+  // Deduplicate current assets in state
+  function handleDeduplicateAssets() {
+    const seen = new Set<string>();
+    let removed = 0;
+    const cleanVms: VmHost[] = [];
+    for (const item of vms) {
+      const k = getAssetKey(item);
+      if (seen.has(k)) {
+        removed++;
+      } else {
+        seen.add(k);
+        cleanVms.push(item);
+      }
+    }
+    setVms(cleanVms);
+    recalculateProjectStats(cleanVms, hosts, switches);
+    return { removedCount: removed };
+  }
+
+  // Batch import with deduplication and strategy (upsert / skip / replace)
+  function handleBatchImportAssets(
+    newAssets: (VmHost & { isImported?: boolean })[],
+    strategy: ImportStrategy = "upsert",
+    targetProjectName?: string | null
+  ) {
+    let finalVms: VmHost[] = [];
+
+    setVms(prev => {
+      // First, deduplicate existing vms to ensure clean baseline
+      const existingMap = new Map<string, VmHost>();
+      for (const item of prev) {
+        const k = getAssetKey(item);
+        if (!existingMap.has(k)) {
+          existingMap.set(k, item);
+        }
+      }
+
+      if (strategy === "replace") {
+        if (targetProjectName && targetProjectName !== "全部项目总览") {
+          const others = Array.from(existingMap.values()).filter(v => v.projectName !== targetProjectName);
+          finalVms = [...newAssets, ...others];
+        } else {
+          finalVms = [...newAssets];
+        }
+      } else if (strategy === "skip") {
+        // Only append those that don't exist
+        const toAppend: VmHost[] = [];
+        for (const asset of newAssets) {
+          const k = getAssetKey(asset);
+          if (!existingMap.has(k)) {
+            existingMap.set(k, asset);
+            toAppend.push(asset);
+          }
+        }
+        finalVms = Array.from(existingMap.values());
+      } else {
+        // Default: "upsert" - smart merge in-place, zero duplicates
+        for (const incoming of newAssets) {
+          const k = getAssetKey(incoming);
+          if (existingMap.has(k)) {
+            const old = existingMap.get(k)!;
+            existingMap.set(k, {
+              ...old,
+              ...incoming,
+              id: old.id, // preserve persistent unique ID
+              isImported: true,
+              updated: new Date().toISOString().slice(0, 10)
+            });
+          } else {
+            existingMap.set(k, incoming);
+          }
+        }
+        finalVms = Array.from(existingMap.values());
+      }
+
+      return finalVms;
+    });
+
+    setTimeout(() => {
+      recalculateProjectStats(finalVms, hosts, switches);
+    }, 0);
   }
 
   // Handlers for Switch
@@ -171,6 +294,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
           onAddVm={handleAddVm}
           onDeleteVm={handleDeleteVm}
           onBatchImportAssets={handleBatchImportAssets}
+          onDeduplicateAssets={handleDeduplicateAssets}
         />
       )}
 

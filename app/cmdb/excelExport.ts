@@ -273,3 +273,85 @@ export async function parseExcelToAssets(file: File): Promise<{
     totalRows: rawRows.length
   };
 }
+
+/**
+ * 获取设备的全局唯一特征 Key
+ * 优先级：
+ * 1. 私有IP / 业务IP (只要合法有效且非占位符，就是最强唯一主键)
+ * 2. 项目名称 + 设备名称
+ * 3. 设备名称
+ */
+export function getAssetKey(asset: {
+  privateIp?: string | null;
+  ip?: string | null;
+  name?: string | null;
+  projectName?: string | null;
+  id?: string;
+}): string {
+  const rawIp = (asset.privateIp || asset.ip || "").trim();
+  const isValidIp = rawIp && rawIp !== "null" && rawIp !== "undefined" && rawIp !== "-" && rawIp !== "/" && rawIp !== "0.0.0.0";
+  if (isValidIp) {
+    return `ip:${rawIp.toLowerCase()}`;
+  }
+  const proj = (asset.projectName || "").trim().toLowerCase();
+  const name = (asset.name || "").trim().toLowerCase();
+  if (name) {
+    return `name:${proj}:::${name}`;
+  }
+  return `id:${asset.id || Math.random().toString()}`;
+}
+
+export interface AssetDiffResult {
+  hasChanged: boolean;
+  diffs: { field: string; label: string; oldVal: any; newVal: any }[];
+}
+
+/**
+ * 资产变更字段对比分析
+ */
+export function diffAssets(
+  existing: Partial<VmHost>,
+  incoming: Partial<VmHost>
+): AssetDiffResult {
+  const diffs: { field: string; label: string; oldVal: any; newVal: any }[] = [];
+
+  const compareList: { field: keyof VmHost; label: string }[] = [
+    { field: "cpuCores", label: "CPU核数" },
+    { field: "memoryGb", label: "内存(GB)" },
+    { field: "systemDiskGb", label: "系统盘(GB)" },
+    { field: "dataDiskGb", label: "数据盘(GB)" },
+    { field: "osVersion", label: "OS版本" },
+    { field: "kernelVersion", label: "内核版本" },
+    { field: "isXinchuang", label: "是否信创" },
+    { field: "remotePort", label: "远程端口" },
+    { field: "remarks", label: "备注" },
+    { field: "env", label: "环境" },
+    { field: "cloudVendor", label: "云厂商" },
+    { field: "regionName", label: "区域" },
+    { field: "internalWanIp", label: "内大网IP" },
+    { field: "vip", label: "VIP" },
+    { field: "eip", label: "EIP" },
+    { field: "publicIp", label: "公网IP" }
+  ];
+
+  for (const item of compareList) {
+    const vOld = existing[item.field];
+    const vNew = incoming[item.field];
+    if (vNew !== undefined && vNew !== null && vNew !== "") {
+      if (vOld !== vNew && String(vOld ?? "").trim() !== String(vNew ?? "").trim()) {
+        diffs.push({
+          field: item.field,
+          label: item.label,
+          oldVal: vOld ?? "无",
+          newVal: vNew
+        });
+      }
+    }
+  }
+
+  return {
+    hasChanged: diffs.length > 0,
+    diffs
+  };
+}
+

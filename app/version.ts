@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.3.1";
+export const APP_VERSION = "1.4.0";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.4.0",
+    date: "2026-09-18",
+    type: "module",
+    title: "新增 CMDB 台账导入智能判重、变更差异比对与一键去重校准引擎",
+    description: "全面升级 Excel 导入体系：基于「业务私有IP」及「项目+设备名」双重特征唯一主键，自动识别重复记录与配置变动字段（CPU/内存/磁盘/OS等）；导入模态框增加差异预检看板与三项处理策略（智能覆盖更新 Upsert、跳过重复 Skip、全量替换 Replace）；同时在台账工作台上线「一键去重并校准」能力，杜绝历史重复数据与脏数据。"
+  },
   {
     version: "1.3.1",
     date: "2026-09-18",

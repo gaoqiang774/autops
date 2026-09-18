@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useMemo } from "react";
 import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, ProjectGroup, AssetMeta, SoftwareComponent, OpsChannel } from "../cmdbData";
-import { exportAssetsToExcel } from "./excelExport";
-import ImportModal from "./ImportModal";
+import { exportAssetsToExcel, getAssetKey } from "./excelExport";
+import ImportModal, { ImportStrategy } from "./ImportModal";
 
 interface HostManagementProps {
   projects: ProjectGroup[];
@@ -20,7 +20,12 @@ interface HostManagementProps {
   onDeleteHost?: (id: string) => void;
   onAddVm: (v: VmHost) => void;
   onDeleteVm: (id: string) => void;
-  onBatchImportAssets?: (assets: (VmHost & { isImported?: boolean })[]) => void;
+  onBatchImportAssets?: (
+    assets: (VmHost & { isImported?: boolean })[],
+    strategy: ImportStrategy,
+    targetProjectName?: string | null
+  ) => void;
+  onDeduplicateAssets?: () => { removedCount: number };
 }
 
 type UnifiedAsset = (PhysicalHost | VmHost | SwitchDevice) & {
@@ -43,7 +48,8 @@ export default function HostManagement({
   onDeleteHost,
   onAddVm,
   onDeleteVm,
-  onBatchImportAssets
+  onBatchImportAssets,
+  onDeduplicateAssets
 }: HostManagementProps) {
   // Tabs & Modal States for Software, Ops Channels, and VPN
   const [detailTab, setDetailTab] = useState<"spec" | "software" | "ops" | "vpn">("spec");
@@ -113,6 +119,29 @@ export default function HostManagement({
     const sList: UnifiedAsset[] = switches.map(s => ({ ...s, _kind: "switch" }));
     return [...pList, ...vList, ...sList].sort((a, b) => (a.seq || 9999) - (b.seq || 9999));
   }, [hosts, vms, switches]);
+
+  // Duplicate device detection across all assets
+  const duplicateCount = useMemo(() => {
+    const keys = new Set<string>();
+    let dups = 0;
+    for (const item of allAssets) {
+      const k = getAssetKey(item);
+      if (keys.has(k)) {
+        dups++;
+      } else {
+        keys.add(k);
+      }
+    }
+    return dups;
+  }, [allAssets]);
+
+  function handleTriggerDeduplicate() {
+    if (onDeduplicateAssets) {
+      const res = onDeduplicateAssets();
+      setToastNotice(`✨ 去重完成！已成功清理 ${res.removedCount} 台重复资产，项目台账已重新校准！`);
+      setTimeout(() => setToastNotice(null), 4000);
+    }
+  }
 
   // Current Asset Softwares & Channels
   const currentAssetSoftwares = useMemo(() => {
@@ -616,6 +645,54 @@ export default function HostManagement({
             </div>
           </div>
         </div>
+
+        {/* Duplicate Warning & One-Click Cleanup Banner */}
+        {duplicateCount > 0 && (
+          <div style={{
+            background: "#fffbeb",
+            border: "1.5px solid #fcd34d",
+            borderRadius: 8,
+            padding: "10px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            boxShadow: "0 2px 6px rgba(217, 119, 6, 0.08)",
+            animation: "fadeIn 0.3s ease"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>⚠️</span>
+              <div>
+                <strong style={{ fontSize: 13, color: "#92400e" }}>
+                  检测到台账中存在 {duplicateCount} 台重复设备（可能由导入历史重复文件引起）
+                </strong>
+                <div style={{ fontSize: 11, color: "#b45309", marginTop: 2 }}>
+                  系统已配备智能去重清洗引擎，点击右侧按钮即可基于「业务IP / 设备标识」快速去重合并，并自动校准各项目资产计数。
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleTriggerDeduplicate}
+              style={{
+                background: "#d97706",
+                borderColor: "#b45309",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: 12,
+                padding: "6px 14px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                cursor: "pointer"
+              }}
+            >
+              <span>🧹</span>
+              <span>一键去重并校准台账</span>
+            </button>
+          </div>
+        )}
 
         {/* Filter Bar & Controls */}
         <div style={{
@@ -2004,12 +2081,14 @@ export default function HostManagement({
       {showImportModal && (
         <ImportModal
           targetProjectName={currentProject ? currentProject.name : null}
+          existingAssets={allAssets}
           onClose={() => setShowImportModal(false)}
-          onConfirmImport={(imported) => {
+          onConfirmImport={(imported, strategy) => {
             if (onBatchImportAssets) {
-              onBatchImportAssets(imported);
+              onBatchImportAssets(imported, strategy, currentProject ? currentProject.name : null);
             }
-            setToastNotice(`✓ 成功导入 ${imported.length} 台设备到资产库！`);
+            const strategyLabel = strategy === "upsert" ? "智能覆盖更新" : strategy === "skip" ? "仅新增(跳过重复)" : "全量替换";
+            setToastNotice(`✓ 执行完成 (${strategyLabel})：共处理 ${imported.length} 台设备！`);
             setTimeout(() => setToastNotice(null), 3500);
           }}
         />
