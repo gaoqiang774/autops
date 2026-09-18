@@ -105,8 +105,15 @@ export default function HostManagement({
 
   // Right Table Filters
   const [assetKeyword, setAssetKeyword] = useState("");
+  const [ipSearchInput, setIpSearchInput] = useState("");
+  const [ipSearchKeyword, setIpSearchKeyword] = useState("");
   const [deviceTypeFilter, setDeviceTypeFilter] = useState("全部");
   const [xinchuangFilter, setXinchuangFilter] = useState("全部");
+
+  // IP Batch Query Modal States
+  const [showIpModal, setShowIpModal] = useState(false);
+  const [ipBatchText, setIpBatchText] = useState("");
+
 
   // Pagination
   const [pageSize, setPageSize] = useState(15);
@@ -417,9 +424,105 @@ export default function HostManagement({
         if (!str.includes(kw)) return false;
       }
 
+      // IP address search (supports single IP, prefix/subnet, or multi-IPs)
+      if (ipSearchKeyword.trim()) {
+        const rawKw = ipSearchKeyword.trim();
+        const targetIps = rawKw.split(/[\s,;，；\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        const hostIps = [
+          item.privateIp,
+          (item as any).ip,
+          item.internalWanIp,
+          item.vip,
+          item.eip,
+          (item as any).publicIp
+        ].filter(Boolean).map(s => String(s).toLowerCase());
+
+        const matched = targetIps.some(tip => 
+          hostIps.some(hip => hip === tip || hip.includes(tip))
+        );
+        if (!matched) return false;
+      }
+
       return true;
     });
-  }, [allAssets, selectedProjectId, currentProject, deviceTypeFilter, xinchuangFilter, assetKeyword]);
+  }, [allAssets, selectedProjectId, currentProject, deviceTypeFilter, xinchuangFilter, assetKeyword, ipSearchKeyword]);
+
+  // Cross-project IP match detection
+  const crossProjectIpMatch = useMemo(() => {
+    if (!ipSearchKeyword.trim() || selectedProjectId === "all") return null;
+    if (displayedAssets.length > 0) return null; // Already matched in current project
+
+    const targetIps = ipSearchKeyword.trim().split(/[\s,;，；\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+    const matchedInAll = allAssets.filter(item => {
+      const hostIps = [
+        item.privateIp,
+        (item as any).ip,
+        item.internalWanIp,
+        item.vip,
+        item.eip,
+        (item as any).publicIp
+      ].filter(Boolean).map(s => String(s).toLowerCase());
+      return targetIps.some(tip => hostIps.some(hip => hip === tip || hip.includes(tip)));
+    });
+
+    if (matchedInAll.length > 0) {
+      const projNames = Array.from(new Set(matchedInAll.map(a => a.projectName).filter(Boolean)));
+      return {
+        count: matchedInAll.length,
+        projects: projNames,
+        targetProject: projects.find(p => p.name === projNames[0]) || null,
+        matchedAssets: matchedInAll
+      };
+    }
+    return null;
+  }, [ipSearchKeyword, selectedProjectId, displayedAssets.length, allAssets, projects]);
+
+  // Batch IP Query calculation
+  const batchIpAnalysis = useMemo(() => {
+    if (!ipBatchText.trim()) return null;
+    const inputLines = ipBatchText
+      .split(/[\s,;，；\n]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const uniqueInputs = Array.from(new Set(inputLines));
+    
+    const matchedAssetsList: UnifiedAsset[] = [];
+    const matchedIpSet = new Set<string>();
+    const notFoundIps: string[] = [];
+
+    uniqueInputs.forEach(inputIp => {
+      const lower = inputIp.toLowerCase();
+      const hits = allAssets.filter(item => {
+        const hostIps = [
+          item.privateIp,
+          (item as any).ip,
+          item.internalWanIp,
+          item.vip,
+          item.eip,
+          (item as any).publicIp
+        ].filter(Boolean).map(s => String(s).toLowerCase());
+        return hostIps.some(hip => hip === lower || hip.includes(lower));
+      });
+
+      if (hits.length > 0) {
+        matchedIpSet.add(inputIp);
+        hits.forEach(h => {
+          if (!matchedAssetsList.some(m => m.id === h.id)) {
+            matchedAssetsList.push(h);
+          }
+        });
+      } else {
+        notFoundIps.push(inputIp);
+      }
+    });
+
+    return {
+      totalInputs: uniqueInputs.length,
+      matchedIpCount: matchedIpSet.size,
+      matchedAssets: matchedAssetsList,
+      notFoundIps
+    };
+  }, [ipBatchText, allAssets]);
 
   // Pagination slice
   const totalPages = Math.ceil(displayedAssets.length / pageSize) || 1;
@@ -848,6 +951,30 @@ export default function HostManagement({
                 <span>导出Excel (02硬件格式)</span>
               </button>
 
+              {/* 🔍 IP地址查询按钮 */}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setIpBatchText(ipSearchKeyword || "");
+                  setShowIpModal(true);
+                }}
+                style={{
+                  padding: "6px 12px",
+                  background: "#f0fdf4",
+                  borderColor: "#86efac",
+                  color: "#166534",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5
+                }}
+                title="快速检索单个或批量比对多个 IP 地址并定位所属项目与资产"
+              >
+                <span>🌐</span>
+                <span>IP地址查询</span>
+              </button>
+
               <button className="btn-primary" onClick={() => setShowAddModal(true)} style={{ padding: "8px 12px" }}>
                 ＋ 录入项目资产
               </button>
@@ -917,11 +1044,63 @@ export default function HostManagement({
         }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <input 
-              placeholder="搜索当前项目设备名称 / IP / 备注..." 
+              placeholder="搜索设备名称 / 备注..." 
               value={assetKeyword}
               onChange={e => { setAssetKeyword(e.target.value); setCurrentPage(1); }}
-              style={{ width: 220, fontSize: 12 }}
+              style={{ width: 170, fontSize: 12 }}
             />
+
+            {/* IP 地址独立检索框与查询按钮 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <input 
+                placeholder="输入IP地址 (业务IP/内大网/VIP/网段)..." 
+                value={ipSearchInput}
+                onChange={e => setIpSearchInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    setIpSearchKeyword(ipSearchInput.trim());
+                    setCurrentPage(1);
+                  }
+                }}
+                style={{ width: 210, fontSize: 12, padding: "4px 8px" }}
+              />
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setIpSearchKeyword(ipSearchInput.trim());
+                  setCurrentPage(1);
+                }}
+                style={{
+                  fontSize: 11,
+                  padding: "4px 9px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap"
+                }}
+                title="按输入的目标 IP 地址进行精准查询与过滤"
+              >
+                <span>🔍</span>
+                <span>查询IP</span>
+              </button>
+              {ipSearchKeyword && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setIpSearchInput("");
+                    setIpSearchKeyword("");
+                    setCurrentPage(1);
+                  }}
+                  style={{ fontSize: 11, padding: "4px 6px", color: "#64748b" }}
+                  title="清除当前 IP 查询"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
             <select 
               value={deviceTypeFilter} 
@@ -945,12 +1124,14 @@ export default function HostManagement({
               <option value="否">常规 OS (CentOS/RedHat)</option>
             </select>
 
-            {(assetKeyword || deviceTypeFilter !== "全部" || xinchuangFilter !== "全部") && (
+            {(assetKeyword || ipSearchKeyword || deviceTypeFilter !== "全部" || xinchuangFilter !== "全部") && (
               <button 
                 className="btn-secondary"
                 style={{ fontSize: 11, padding: "3px 8px" }}
                 onClick={() => {
                   setAssetKeyword("");
+                  setIpSearchInput("");
+                  setIpSearchKeyword("");
                   setDeviceTypeFilter("全部");
                   setXinchuangFilter("全部");
                   setCurrentPage(1);
@@ -987,6 +1168,57 @@ export default function HostManagement({
             </button>
           </div>
         </div>
+
+        {/* 💡 跨项目 IP 智能发现与定位卡片 */}
+        {crossProjectIpMatch && (
+          <div style={{
+            background: "#eff6ff",
+            border: "1.5px solid #bfdbfe",
+            borderRadius: 8,
+            padding: "10px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            boxShadow: "0 2px 6px rgba(37, 99, 235, 0.08)",
+            animation: "fadeIn 0.25s ease"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>💡</span>
+              <div>
+                <strong style={{ fontSize: 13, color: "#1e40af" }}>
+                  在当前选定项目【{currentProject?.name}】未找到 IP【{ipSearchKeyword}】，但已在其他项目中定位到 {crossProjectIpMatch.count} 台匹配设备！
+                </strong>
+                <div style={{ fontSize: 11, color: "#3b82f6", marginTop: 2 }}>
+                  涉及项目: {crossProjectIpMatch.projects.join("、")} · 匹配资产: {crossProjectIpMatch.matchedAssets.map(a => `${a.name} (${a.privateIp || a.ip})`).slice(0, 3).join(", ")}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {crossProjectIpMatch.targetProject && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    if (crossProjectIpMatch.targetProject) {
+                      setSelectedProjectId(crossProjectIpMatch.targetProject.id);
+                    }
+                  }}
+                  style={{ fontSize: 11, padding: "5px 12px" }}
+                >
+                  📍 切换至【{crossProjectIpMatch.targetProject.name}】查看
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setSelectedProjectId("all")}
+                style={{ fontSize: 11, padding: "5px 10px", background: "#fff" }}
+              >
+                🌟 切换到全量项目总览
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Assets Table Container */}
         <div style={{
@@ -2680,6 +2912,208 @@ export default function HostManagement({
               >
                 ✓ 确认注销删除
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: IP ADDRESS QUERY & BATCH LOOKUP ================= */}
+      {showIpModal && (
+        <div className="cmdb-modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="cmdb-modal-content" style={{ width: 850, maxWidth: "95vw", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+            <div className="cmdb-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", padding: "14px 20px" }}>
+              <h3 style={{ margin: 0, fontSize: 16, display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
+                <span>🌐</span>
+                <span>IP 地址精准检索与批量比对</span>
+                <span style={{ fontSize: 11, background: "#ecfdf5", color: "#059669", padding: "2px 8px", borderRadius: 4, fontWeight: 500 }}>
+                  支持单IP / 批量多IP / 智能网段
+                </span>
+              </h3>
+              <button type="button" className="cmdb-modal-close" onClick={() => setShowIpModal(false)}>×</button>
+            </div>
+
+            <div className="cmdb-modal-body" style={{ padding: "16px 20px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                    输入待查询的 IP 地址列表 (支持换行、逗号或空格分隔)：
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 8px" }}
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard?.readText();
+                          if (text) setIpBatchText(text.trim());
+                        } catch (e) {
+                          // ignore
+                        }
+                      }}
+                    >
+                      📋 粘贴剪贴板内容
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 8px", color: "#dc2626" }}
+                      onClick={() => setIpBatchText("")}
+                    >
+                      ✕ 清空
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  rows={4}
+                  placeholder={`例如输入单个或多个 IP，亦可输入前缀网段：\n10.150.88.10\n10.150.88.11\n192.125.31.250\n10.150.`}
+                  value={ipBatchText}
+                  onChange={e => setIpBatchText(e.target.value)}
+                  style={{
+                    width: "100%",
+                    fontSize: 12,
+                    fontFamily: "monospace",
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    border: "1.5px solid #cbd5e1",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+
+              {/* Analysis Stats Bar */}
+              {batchIpAnalysis && (
+                <div style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "10px 14px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 10
+                }}>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      输入 IP 数量: <strong style={{ color: "#0f172a" }}>{batchIpAnalysis.totalInputs}</strong>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#166534" }}>
+                      已匹配命中: <strong style={{ color: "#16a34a" }}>{batchIpAnalysis.matchedIpCount} 个 IP ({batchIpAnalysis.matchedAssets.length} 台设备)</strong>
+                    </div>
+                    {batchIpAnalysis.notFoundIps.length > 0 && (
+                      <div style={{ fontSize: 12, color: "#b91c1c" }}>
+                        未录入/未找到: <strong style={{ color: "#dc2626" }}>{batchIpAnalysis.notFoundIps.length} 个</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "3px 8px" }}
+                      onClick={() => {
+                        const summary = batchIpAnalysis.matchedAssets.map(a => 
+                          `${a.name}\t${a.privateIp || a.ip}\t${a.projectName}\t${a.customerName}\t${a.osVersion || a.os}`
+                        ).join("\n");
+                        navigator.clipboard?.writeText?.(summary);
+                        setToastNotice("✓ 已复制匹配资产列表到剪贴板！");
+                        setTimeout(() => setToastNotice(null), 3000);
+                      }}
+                    >
+                      📋 复制匹配结果
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 11, padding: "3px 10px" }}
+                      onClick={() => {
+                        setSelectedProjectId("all");
+                        setIpSearchKeyword(ipBatchText.trim());
+                        setIpSearchInput(ipBatchText.trim().replace(/[\r\n]+/g, " "));
+                        setShowIpModal(false);
+                        setCurrentPage(1);
+                        setToastNotice(`✓ 已在全量台账中定位这 ${batchIpAnalysis.matchedAssets.length} 台资产！`);
+                        setTimeout(() => setToastNotice(null), 3500);
+                      }}
+                    >
+                      📍 在台账列表中定位这批设备 ({batchIpAnalysis.matchedAssets.length}台)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Matched Assets Table */}
+              {batchIpAnalysis && batchIpAnalysis.matchedAssets.length > 0 && (
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden", maxHeight: 280, overflowY: "auto" }}>
+                  <table className="cmdb-data-table" style={{ fontSize: 11, width: "100%" }}>
+                    <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+                      <tr>
+                        <th style={{ width: 40 }}>序号</th>
+                        <th style={{ width: 160 }}>设备名称</th>
+                        <th style={{ width: 130 }}>业务私有 IP</th>
+                        <th style={{ width: 110 }}>内大网 / VIP</th>
+                        <th style={{ width: 160 }}>所属项目 · 客户单位</th>
+                        <th style={{ width: 120 }}>操作系统</th>
+                        <th style={{ width: 60, textAlign: "center" }}>定位</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchIpAnalysis.matchedAssets.map((asset, idx) => (
+                        <tr key={asset.id}>
+                          <td style={{ fontFamily: "monospace", color: "#64748b" }}>{idx + 1}</td>
+                          <td>
+                            <strong>{asset.name}</strong>
+                          </td>
+                          <td>
+                            <code style={{ color: "#2563eb", fontWeight: 600 }}>{asset.privateIp || asset.ip || "-"}</code>
+                          </td>
+                          <td>
+                            <code style={{ color: "#64748b" }}>{asset.internalWanIp || asset.vip || "-"}</code>
+                          </td>
+                          <td>
+                            <div>{asset.projectName}</div>
+                            <small style={{ color: "#94a3b8" }}>{asset.customerName}</small>
+                          </td>
+                          <td>{asset.osVersion || asset.os || "-"}</td>
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              style={{ fontSize: 10, padding: "2px 6px" }}
+                              onClick={() => {
+                                const targetProj = projects.find(p => p.name === asset.projectName);
+                                if (targetProj) setSelectedProjectId(targetProj.id);
+                                else setSelectedProjectId("all");
+                                setIpSearchKeyword(asset.privateIp || asset.ip || "");
+                                setIpSearchInput(asset.privateIp || asset.ip || "");
+                                setShowIpModal(false);
+                                setCurrentPage(1);
+                              }}
+                              title="点击在工作台定位并打开该设备"
+                            >
+                              定位
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Not Found IPs List */}
+              {batchIpAnalysis && batchIpAnalysis.notFoundIps.length > 0 && (
+                <div style={{ background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: 6, padding: "8px 12px", fontSize: 11 }}>
+                  <span style={{ color: "#dc2626", fontWeight: 600 }}>未在现有 292 台台账中检索到的 IP ({batchIpAnalysis.notFoundIps.length}个): </span>
+                  <span style={{ color: "#b91c1c", fontFamily: "monospace" }}>{batchIpAnalysis.notFoundIps.join(", ")}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" className="btn-secondary" onClick={() => setShowIpModal(false)}>关 闭</button>
             </div>
           </div>
         </div>

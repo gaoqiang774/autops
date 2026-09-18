@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.5.0";
+export const APP_VERSION = "1.6.0";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.6.0",
+    date: "2026-09-18",
+    type: "module",
+    title: "新增项目资产与漏洞检测多维 IP 地址查询与批量比对排查系统",
+    description: "在「项目资产」与「漏洞检测」两大核心模块全面上线 IP 地址精准检索与批量排查体系：资产工作台新增独立 IP 检索框、查询按钮、跨项目 IP 智能定位引导及「IP 地址批量检索比对」弹窗；漏洞检测模块新增第 4 维度目标 IP 输入检索及「受威胁资产 IP 分析与批量定位」弹窗，无缝支持安全告警与日常运维的秒级设备定位。"
+  },
   {
     version: "1.5.0",
     date: "2026-09-18",

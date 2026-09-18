@@ -94,10 +94,17 @@ export default function VulnDetection({
   const [osFamilyInput, setOsFamilyInput] = useState("");
   const [osVersionInput, setOsVersionInput] = useState("");
   const [kernelInput, setKernelInput] = useState("");
+  const [ipSearchInput, setIpSearchInput] = useState("");
+  const [ipSearchKeyword, setIpSearchKeyword] = useState("");
   const [projectFilter, setProjectFilter] = useState("全部");
   const [envFilter, setEnvFilter] = useState("全部");
   const [exposureFilter, setExposureFilter] = useState("全部");
   const [activeCveId, setActiveCveId] = useState<string | null>(null);
+
+  // Vuln IP Batch Modal State
+  const [showVulnIpModal, setShowVulnIpModal] = useState(false);
+  const [vulnIpBatchText, setVulnIpBatchText] = useState("");
+
 
   // Pagination
   const [pageSize, setPageSize] = useState(15);
@@ -171,9 +178,90 @@ export default function VulnDetection({
         if (item.eip || item.publicIp) return false;
       }
 
+      // IP Address matching (supports single IP, comma/space separated, or prefix/subnet)
+      if (ipSearchKeyword.trim()) {
+        const rawKw = ipSearchKeyword.trim();
+        const targetIps = rawKw.split(/[\s,;，；\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        const hostIps = [
+          item.privateIp,
+          (item as any).ip,
+          item.internalWanIp,
+          item.vip,
+          item.eip,
+          (item as any).publicIp
+        ].filter(Boolean).map(s => String(s).toLowerCase());
+
+        const matched = targetIps.some(tip => 
+          hostIps.some(hip => hip === tip || hip.includes(tip))
+        );
+        if (!matched) return false;
+      }
+
       return true;
     });
-  }, [allAssets, osFamilyInput, osVersionInput, kernelInput, projectFilter, envFilter, exposureFilter]);
+  }, [allAssets, osFamilyInput, osVersionInput, kernelInput, projectFilter, envFilter, exposureFilter, ipSearchKeyword]);
+
+  // Vuln Batch IP Analysis
+  const vulnBatchAnalysis = useMemo(() => {
+    if (!vulnIpBatchText.trim()) return null;
+    const inputLines = vulnIpBatchText
+      .split(/[\s,;，；\n]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const uniqueInputs = Array.from(new Set(inputLines));
+
+    const matchedList: Array<{
+      asset: UnifiedAsset;
+      matchedQueryIp: string;
+      isVulnHit: boolean;
+      riskScore: string;
+    }> = [];
+    const notFoundIps: string[] = [];
+
+    uniqueInputs.forEach(inputIp => {
+      const lower = inputIp.toLowerCase();
+      const hits = allAssets.filter(item => {
+        const hostIps = [
+          item.privateIp,
+          (item as any).ip,
+          item.internalWanIp,
+          item.vip,
+          item.eip,
+          (item as any).publicIp
+        ].filter(Boolean).map(s => String(s).toLowerCase());
+        return hostIps.some(hip => hip === lower || hip.includes(lower));
+      });
+
+      if (hits.length > 0) {
+        hits.forEach(h => {
+          const isVulnHit = matchedAssets.some(m => m.id === h.id);
+          const hasPublic = !!(h.eip || h.publicIp);
+          let risk = "中危";
+          if (hasPublic && h.env === "生产") risk = "🚨 极高危";
+          else if (hasPublic || h.env === "生产") risk = "⚠️ 高危";
+
+          if (!matchedList.some(item => item.asset.id === h.id)) {
+            matchedList.push({
+              asset: h,
+              matchedQueryIp: inputIp,
+              isVulnHit,
+              riskScore: risk
+            });
+          }
+        });
+      } else {
+        notFoundIps.push(inputIp);
+      }
+    });
+
+    return {
+      totalInputs: uniqueInputs.length,
+      matchedCount: matchedList.length,
+      vulnHitCount: matchedList.filter(m => m.isVulnHit).length,
+      matchedList,
+      notFoundIps
+    };
+  }, [vulnIpBatchText, allAssets, matchedAssets]);
 
   // Pagination slice
   const totalPages = Math.ceil(matchedAssets.length / pageSize) || 1;
@@ -228,6 +316,8 @@ export default function VulnDetection({
     setOsFamilyInput("");
     setOsVersionInput("");
     setKernelInput("");
+    setIpSearchInput("");
+    setIpSearchKeyword("");
     setProjectFilter("全部");
     setEnvFilter("全部");
     setExposureFilter("全部");
@@ -424,16 +514,73 @@ export default function VulnDetection({
             </div>
 
             {/* Input 3: Kernel Version */}
-            <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#334155", marginBottom: 4 }}>
                 3. 内核版本特征 (Kernel Version)
               </label>
               <input 
-                placeholder="如: 3.10.0、2.6.32、4.19、4.15..."
+                placeholder="如: 3.10.0、2.6.32、4.19..."
                 value={kernelInput}
                 onChange={e => { setKernelInput(e.target.value); setCurrentPage(1); setActiveCveId(null); }}
                 style={{ width: "100%", fontSize: 12, padding: "6px 10px", borderRadius: 4, border: "1.5px solid #cbd5e1" }}
               />
+            </div>
+
+            {/* Input 4: Target IP Address */}
+            <div style={{ flex: 1.2, minWidth: 230 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#334155", marginBottom: 4 }}>
+                4. 目标 IP 地址 (IP Address)
+              </label>
+              <div style={{ display: "flex", gap: 4 }}>
+                <input 
+                  placeholder="如: 192.125.31.250 或 10.150."
+                  value={ipSearchInput}
+                  onChange={e => setIpSearchInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      setIpSearchKeyword(ipSearchInput.trim());
+                      setCurrentPage(1);
+                    }
+                  }}
+                  style={{ flex: 1, fontSize: 12, padding: "6px 10px", borderRadius: 4, border: "1.5px solid #cbd5e1" }}
+                />
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    setIpSearchKeyword(ipSearchInput.trim());
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    fontSize: 11,
+                    padding: "0 10px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }}
+                  title="按输入的 IP 地址快速检索过滤受影响主机"
+                >
+                  <span>🔍</span>
+                  <span>查询IP</span>
+                </button>
+                {ipSearchKeyword && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setIpSearchInput("");
+                      setIpSearchKeyword("");
+                      setCurrentPage(1);
+                    }}
+                    style={{ fontSize: 11, padding: "0 6px", color: "#64748b" }}
+                    title="清除当前 IP 查询"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Reset Button */}
@@ -623,6 +770,30 @@ export default function VulnDetection({
 
         {/* Action Buttons: Export, Batch Copy & Emergency CLI Modal */}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* 🔍 IP地址查询按钮 */}
+          <button
+            className="btn-secondary"
+            style={{
+              fontSize: 12,
+              padding: "5px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              borderColor: "#10b981",
+              color: "#059669",
+              background: "#ecfdf5",
+              fontWeight: 600
+            }}
+            onClick={() => {
+              setVulnIpBatchText(ipSearchKeyword || "");
+              setShowVulnIpModal(true);
+            }}
+            title="输入或批量粘贴 IP 地址，一键分析其受威胁漏洞与归属项目"
+          >
+            <span>🌐</span>
+            <span>IP地址查询</span>
+          </button>
+
           <button
             className="btn-secondary"
             style={{
@@ -1211,6 +1382,197 @@ export default function VulnDetection({
               >
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: VULNERABILITY IP ANALYSIS & LOOKUP ================= */}
+      {showVulnIpModal && (
+        <div className="cmdb-modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="cmdb-modal-content" style={{ width: 880, maxWidth: "95vw", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+            <div className="cmdb-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e2e8f0", padding: "14px 20px" }}>
+              <h3 style={{ margin: 0, fontSize: 16, display: "flex", alignItems: "center", gap: 8, color: "#0f172a" }}>
+                <span>🛡️</span>
+                <span>漏洞资产 IP 快速定位与受威胁分析</span>
+                <span style={{ fontSize: 11, background: "#ecfdf5", color: "#059669", padding: "2px 8px", borderRadius: 4, fontWeight: 500 }}>
+                  支持安全告警多IP批量排查
+                </span>
+              </h3>
+              <button type="button" className="cmdb-modal-close" onClick={() => setShowVulnIpModal(false)}>×</button>
+            </div>
+
+            <div className="cmdb-modal-body" style={{ padding: "16px 20px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                    输入或粘贴待排查的 IP 地址清单 (如来自漏洞扫描报告、告警工单，支持换行或空格)：
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 8px" }}
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard?.readText();
+                          if (text) setVulnIpBatchText(text.trim());
+                        } catch (e) {
+                          // ignore
+                        }
+                      }}
+                    >
+                      📋 粘贴剪贴板内容
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 8px", color: "#dc2626" }}
+                      onClick={() => setVulnIpBatchText("")}
+                    >
+                      ✕ 清空
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  rows={4}
+                  placeholder={`例如输入单个或多个 IP，如：\n192.125.31.250\n10.150.88.10\n192.123.2.110\n10.150.`}
+                  value={vulnIpBatchText}
+                  onChange={e => setVulnIpBatchText(e.target.value)}
+                  style={{
+                    width: "100%",
+                    fontSize: 12,
+                    fontFamily: "monospace",
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    border: "1.5px solid #cbd5e1",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+
+              {/* Analysis Stats Bar */}
+              {vulnBatchAnalysis && (
+                <div style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "10px 14px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 10
+                }}>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      输入 IP 数量: <strong style={{ color: "#0f172a" }}>{vulnBatchAnalysis.totalInputs}</strong>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#2563eb" }}>
+                      命中台账资产: <strong style={{ color: "#1d4ed8" }}>{vulnBatchAnalysis.matchedCount} 台</strong>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#dc2626" }}>
+                      受当前漏洞威胁: <strong style={{ color: "#b91c1c" }}>{vulnBatchAnalysis.vulnHitCount} 台</strong>
+                    </div>
+                    {vulnBatchAnalysis.notFoundIps.length > 0 && (
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        未登记 IP: <strong>{vulnBatchAnalysis.notFoundIps.length} 个</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "3px 8px" }}
+                      onClick={() => {
+                        const summary = vulnBatchAnalysis.matchedList.map(item => 
+                          `${item.asset.name}\t${item.asset.privateIp || item.asset.ip}\t${item.asset.projectName}\t${item.asset.osVersion || item.asset.os}\t${item.riskScore}\t${item.isVulnHit ? "命中漏洞" : "当前安全"}`
+                        ).join("\n");
+                        navigator.clipboard?.writeText?.(summary);
+                        alert("✓ 已复制漏洞排查分析结果到剪贴板！");
+                      }}
+                    >
+                      📋 复制分析结果
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 11, padding: "3px 10px" }}
+                      onClick={() => {
+                        setIpSearchKeyword(vulnIpBatchText.trim());
+                        setIpSearchInput(vulnIpBatchText.trim().replace(/[\r\n]+/g, " "));
+                        setShowVulnIpModal(false);
+                        setCurrentPage(1);
+                      }}
+                    >
+                      📍 应用至当前排查列表 ({vulnBatchAnalysis.matchedCount}台)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Matched Assets Table */}
+              {vulnBatchAnalysis && vulnBatchAnalysis.matchedList.length > 0 && (
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden", maxHeight: 280, overflowY: "auto" }}>
+                  <table className="cmdb-data-table" style={{ fontSize: 11, width: "100%" }}>
+                    <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+                      <tr>
+                        <th style={{ width: 40 }}>序号</th>
+                        <th style={{ width: 160 }}>设备名称</th>
+                        <th style={{ width: 130 }}>私有业务 IP</th>
+                        <th style={{ width: 140 }}>所属项目</th>
+                        <th style={{ width: 140 }}>系统与内核版本</th>
+                        <th style={{ width: 90 }}>安全威胁状态</th>
+                        <th style={{ width: 80 }}>公网暴露</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vulnBatchAnalysis.matchedList.map((item, idx) => (
+                        <tr key={item.asset.id}>
+                          <td style={{ fontFamily: "monospace", color: "#64748b" }}>{idx + 1}</td>
+                          <td><strong>{item.asset.name}</strong></td>
+                          <td><code style={{ color: "#2563eb", fontWeight: 600 }}>{item.asset.privateIp || item.asset.ip || "-"}</code></td>
+                          <td>{item.asset.projectName}</td>
+                          <td>{item.asset.osVersion || item.asset.os} <small style={{ color: "#94a3b8" }}>{item.asset.kernelVersion}</small></td>
+                          <td>
+                            <span style={{
+                              padding: "1px 6px",
+                              borderRadius: 3,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              background: item.isVulnHit ? "#fee2e2" : "#f0fdf4",
+                              color: item.isVulnHit ? "#b91c1c" : "#15803d"
+                            }}>
+                              {item.isVulnHit ? "⚠️ 命中漏洞" : "🛡️ 未命中当前规则"}
+                            </span>
+                          </td>
+                          <td>
+                            {item.asset.eip || item.asset.publicIp ? (
+                              <span style={{ color: "#dc2626", fontWeight: 600 }}>直接暴露</span>
+                            ) : (
+                              <span style={{ color: "#16a34a" }}>仅内网</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Not Found IPs List */}
+              {vulnBatchAnalysis && vulnBatchAnalysis.notFoundIps.length > 0 && (
+                <div style={{ background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: 6, padding: "8px 12px", fontSize: 11 }}>
+                  <span style={{ color: "#dc2626", fontWeight: 600 }}>未在台账中检索到的 IP ({vulnBatchAnalysis.notFoundIps.length}个): </span>
+                  <span style={{ color: "#b91c1c", fontFamily: "monospace" }}>{vulnBatchAnalysis.notFoundIps.join(", ")}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" className="btn-secondary" onClick={() => setShowVulnIpModal(false)}>关 闭</button>
             </div>
           </div>
         </div>
