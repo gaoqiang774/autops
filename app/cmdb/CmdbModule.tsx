@@ -9,6 +9,8 @@ import {
   initialBusinesses,
   initialProbes,
   initialCredentials,
+  initialSoftwareComponents,
+  initialOpsChannels,
   ProjectGroup,
   PhysicalHost,
   VmHost,
@@ -16,6 +18,8 @@ import {
   DatabaseAsset,
   BusinessModel,
   CredentialItem,
+  SoftwareComponent,
+  OpsChannel,
   IdcRoom,
   IdcCabinet
 } from "../cmdbData";
@@ -43,6 +47,26 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
   const [businesses, setBusinesses] = useState<BusinessModel[]>(initialBusinesses);
   const [probes, setProbes] = useState(initialProbes);
   const [credentials, setCredentials] = useState(initialCredentials);
+  const [softwareList, setSoftwareList] = useState<SoftwareComponent[]>(initialSoftwareComponents);
+  const [channelList, setChannelList] = useState<OpsChannel[]>(initialOpsChannels);
+
+  // Handlers for Software Components
+  function handleAddSoftware(newSoft: SoftwareComponent) {
+    setSoftwareList(prev => [newSoft, ...prev]);
+  }
+
+  function handleDeleteSoftware(softId: string) {
+    setSoftwareList(prev => prev.filter(s => s.id !== softId));
+  }
+
+  // Handlers for Ops Channels
+  function handleAddChannel(newChan: OpsChannel) {
+    setChannelList(prev => [newChan, ...prev]);
+  }
+
+  function handleDeleteChannel(chanId: string) {
+    setChannelList(prev => prev.filter(c => c.id !== chanId));
+  }
 
   // Handlers for Host
   function handleAddHost(newHost: PhysicalHost) {
@@ -115,6 +139,12 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
           vms={vms}
           switches={switches}
           databases={databases}
+          softwareList={softwareList}
+          channelList={channelList}
+          onAddSoftware={handleAddSoftware}
+          onDeleteSoftware={handleDeleteSoftware}
+          onAddChannel={handleAddChannel}
+          onDeleteChannel={handleDeleteChannel}
           onAddHost={handleAddHost}
           onDeleteHost={handleDeleteHost}
           onAddVm={handleAddVm}

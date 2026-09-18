@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, ProjectGroup, AssetMeta } from "../cmdbData";
+import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, ProjectGroup, AssetMeta, SoftwareComponent, OpsChannel } from "../cmdbData";
 
 interface HostManagementProps {
   projects: ProjectGroup[];
@@ -8,6 +8,12 @@ interface HostManagementProps {
   vms: VmHost[];
   switches?: SwitchDevice[];
   databases?: DatabaseAsset[];
+  softwareList?: SoftwareComponent[];
+  channelList?: OpsChannel[];
+  onAddSoftware?: (s: SoftwareComponent) => void;
+  onDeleteSoftware?: (id: string) => void;
+  onAddChannel?: (c: OpsChannel) => void;
+  onDeleteChannel?: (id: string) => void;
   onAddHost?: (h: PhysicalHost) => void;
   onDeleteHost?: (id: string) => void;
   onAddVm: (v: VmHost) => void;
@@ -24,11 +30,47 @@ export default function HostManagement({
   vms,
   switches = [],
   databases = [],
+  softwareList = [],
+  channelList = [],
+  onAddSoftware,
+  onDeleteSoftware,
+  onAddChannel,
+  onDeleteChannel,
   onAddHost,
   onDeleteHost,
   onAddVm,
   onDeleteVm
 }: HostManagementProps) {
+  // Tabs & Modal States for Software, Ops Channels, and VPN
+  const [detailTab, setDetailTab] = useState<"spec" | "software" | "ops" | "vpn">("spec");
+  const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
+  const [showAddSoftForm, setShowAddSoftForm] = useState(false);
+  const [newSoftDraft, setNewSoftDraft] = useState({
+    name: "",
+    category: "database" as "database" | "middleware" | "plugin" | "web_server",
+    version: "",
+    port: "",
+    installPath: "",
+    configPath: "",
+    remarks: ""
+  });
+  const [showAddChanForm, setShowAddChanForm] = useState(false);
+  const [newChanDraft, setNewChanDraft] = useState({
+    name: "",
+    channelType: "web_link" as "web_link" | "ssh" | "rdp" | "jumpserver" | "vpn",
+    urlOrTarget: "",
+    accountNote: "",
+    remarks: ""
+  });
+  const [showProjectVpnModal, setShowProjectVpnModal] = useState(false);
+
+  function copyToClipboard(text: string, label: string) {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+    }
+    setCopiedNotice(label);
+    setTimeout(() => setCopiedNotice(null), 2500);
+  }
   // Selected project ID ("all" for all assets)
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || "all");
   
@@ -58,6 +100,39 @@ export default function HostManagement({
     const sList: UnifiedAsset[] = switches.map(s => ({ ...s, _kind: "switch" }));
     return [...pList, ...vList, ...sList].sort((a, b) => (a.seq || 9999) - (b.seq || 9999));
   }, [hosts, vms, switches]);
+
+  // Current Asset Softwares & Channels
+  const currentAssetSoftwares = useMemo(() => {
+    if (!detailAsset) return [];
+    const ip = detailAsset.privateIp || detailAsset.ip;
+    return softwareList.filter(s => 
+      s.assetId === detailAsset.id || 
+      (ip && s.assetIp === ip) || 
+      (s.assetName && s.assetName === detailAsset.name)
+    );
+  }, [detailAsset, softwareList]);
+
+  const currentAssetChannels = useMemo(() => {
+    if (!detailAsset) return [];
+    const ip = detailAsset.privateIp || detailAsset.ip;
+    return channelList.filter(c => 
+      c.assetId === detailAsset.id || 
+      (ip && c.assetIp === ip) || 
+      (detailAsset.projectId && c.projectId === detailAsset.projectId) || 
+      (detailAsset.projectName && c.projectName === detailAsset.projectName)
+    );
+  }, [detailAsset, channelList]);
+
+  // Project-level VPN & Links
+  const currentProjectVpn = useMemo(() => {
+    if (!currentProject) return null;
+    return channelList.find(c => c.channelType === "vpn" && (c.projectId === currentProject.id || c.projectName === currentProject.name));
+  }, [currentProject, channelList]);
+
+  const currentProjectWebLinks = useMemo(() => {
+    if (!currentProject) return [];
+    return channelList.filter(c => c.channelType === "web_link" && (c.projectId === currentProject.id || c.projectName === currentProject.name));
+  }, [currentProject, channelList]);
 
   // Unique customers for project sidebar filter
   const customerOptions = useMemo(() => {
@@ -458,6 +533,28 @@ export default function HostManagement({
                 </>
               )}
 
+              {currentProjectVpn && (
+                <button 
+                  type="button"
+                  className="btn-secondary" 
+                  onClick={() => setShowProjectVpnModal(true)} 
+                  style={{ 
+                    padding: "6px 11px", 
+                    background: "#f0fdf4", 
+                    borderColor: "#86efac", 
+                    color: "#166534", 
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5
+                  }}
+                  title="查看当前项目专网 VPN 网关及拨号策略"
+                >
+                  <span>🛡️</span>
+                  <span>项目专网VPN</span>
+                </button>
+              )}
+
               <button className="btn-primary" onClick={() => setShowAddModal(true)} style={{ padding: "8px 12px" }}>
                 ＋ 录入项目资产
               </button>
@@ -599,6 +696,26 @@ export default function HostManagement({
                               {(item as any).brand} {(item as any).model} · 码: {(item as any).assetNo}
                             </small>
                           )}
+                          {/* 软件栈微徽章 */}
+                          {(() => {
+                            const ip = item.privateIp || item.ip;
+                            const sList = softwareList.filter(s => s.assetId === item.id || (ip && s.assetIp === ip) || s.assetName === item.name);
+                            if (sList.length === 0) return null;
+                            return (
+                              <div 
+                                style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, cursor: "pointer", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "1px 6px", borderRadius: 4 }}
+                                onClick={(e) => { e.stopPropagation(); setDetailAsset(item); setDetailTab("software"); }}
+                                title="点击查看部署软件与中间件详情"
+                              >
+                                <span style={{ fontSize: 10, color: "#166534", fontWeight: 700 }}>
+                                  🧩 {sList.length}个软件
+                                </span>
+                                <span style={{ fontSize: 10, color: "#15803d" }}>
+                                  ({sList.slice(0, 2).map(s => s.name.split(" ")[0]).join("/")}{sList.length > 2 ? "..." : ""})
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Project & Customer */}
@@ -706,17 +823,26 @@ export default function HostManagement({
                             <button 
                               className="btn-secondary" 
                               style={{ padding: "2px 6px", fontSize: 11 }}
-                              onClick={() => setDetailAsset(item)}
-                              title="查看资产档案"
+                              onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
+                              title="查看资产规格与OS档案"
                             >
                               档案
                             </button>
                             <button 
                               className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11, color: "#2563eb" }}
-                              onClick={() => alert(`已为 [${item.name} (${item.privateIp || item.ip})] 开启终端会话！`)}
+                              style={{ padding: "2px 6px", fontSize: 11, color: "#0d9488", borderColor: "#99f6e4", background: "#f0fdfa" }}
+                              onClick={() => { setDetailAsset(item); setDetailTab("software"); }}
+                              title="查看或配置该机器运行的数据库、中间件与插件"
                             >
-                              终端
+                              🧩软件
+                            </button>
+                            <button 
+                              className="btn-secondary" 
+                              style={{ padding: "2px 6px", fontSize: 11, color: "#2563eb", borderColor: "#bfdbfe", background: "#eff6ff" }}
+                              onClick={() => { setDetailAsset(item); setDetailTab("ops"); }}
+                              title="查看系统登录链接、SSH直连与VPN通道"
+                            >
+                              🚀运维
                             </button>
                           </div>
                         </td>
@@ -814,80 +940,711 @@ export default function HostManagement({
               <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setDetailAsset(null)}>×</button>
             </div>
 
-            <div className="cmdb-modal-body" style={{ maxHeight: "72vh", overflowY: "auto", padding: 20 }}>
-              {/* 基本信息 */}
-              <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0284c7", borderBottom: "1px solid #e0f2fe", paddingBottom: 4 }}>
-                📋 项目与基础归属 (台账基本信息)
-              </h5>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                <div><span style={{ color: "#64748b" }}>项目名称:</span> <strong style={{ color: "#1d4ed8" }}>{detailAsset.projectName || "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>客户名称:</span> <strong>{detailAsset.customerName || "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>环境类型:</span> <strong>{detailAsset.env || "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>承载云商:</span> <strong style={{ color: "#2563eb" }}>{detailAsset.cloudVendor || "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>安全区域:</span> <strong>{detailAsset.regionName || "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>设备大类:</span> <strong>{detailAsset.category || "服务器"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>设备类型:</span> <strong>{detailAsset.deviceType || "虚拟机"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>资产形态:</span> <strong>{detailAsset._kind === "physical" ? "实体物理服务器" : "虚拟计算节点"}</strong></div>
+                        <div className="cmdb-modal-body" style={{ maxHeight: "74vh", overflowY: "auto", padding: "16px 20px" }}>
+              {/* Tab Navigation */}
+              <div style={{
+                display: "flex",
+                gap: 8,
+                borderBottom: "2px solid #e2e8f0",
+                marginBottom: 16,
+                paddingBottom: 2
+              }}>
+                <button 
+                  type="button"
+                  onClick={() => setDetailTab("spec")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    color: detailTab === "spec" ? "#2563eb" : "#64748b",
+                    borderBottom: detailTab === "spec" ? "2px solid #2563eb" : "2px solid transparent",
+                    marginBottom: -4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <span>📋</span>
+                  <span>硬件规格与OS</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setDetailTab("software")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    color: detailTab === "software" ? "#0d9488" : "#64748b",
+                    borderBottom: detailTab === "software" ? "2px solid #0d9488" : "2px solid transparent",
+                    marginBottom: -4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <span>🧩</span>
+                  <span>软件·中间件·数据库</span>
+                  <span style={{ 
+                    background: detailTab === "software" ? "#ccfbf1" : "#f1f5f9", 
+                    color: detailTab === "software" ? "#0f766e" : "#64748b", 
+                    fontSize: 11, 
+                    padding: "0 6px", 
+                    borderRadius: 10 
+                  }}>
+                    {currentAssetSoftwares.length}
+                  </span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setDetailTab("ops")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    color: detailTab === "ops" ? "#7c3aed" : "#64748b",
+                    borderBottom: detailTab === "ops" ? "2px solid #7c3aed" : "2px solid transparent",
+                    marginBottom: -4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <span>🚀</span>
+                  <span>登录与运维通道</span>
+                  <span style={{ 
+                    background: detailTab === "ops" ? "#ede9fe" : "#f1f5f9", 
+                    color: detailTab === "ops" ? "#6d28d9" : "#64748b", 
+                    fontSize: 11, 
+                    padding: "0 6px", 
+                    borderRadius: 10 
+                  }}>
+                    {currentAssetChannels.length}
+                  </span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setDetailTab("vpn")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: "8px 14px",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    color: detailTab === "vpn" ? "#ea580c" : "#64748b",
+                    borderBottom: detailTab === "vpn" ? "2px solid #ea580c" : "2px solid transparent",
+                    marginBottom: -4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <span>🛡️</span>
+                  <span>VPN 专网通道</span>
+                </button>
+
+                {copiedNotice && (
+                  <span style={{ marginLeft: "auto", alignSelf: "center", fontSize: 11, color: "#16a34a", background: "#dcfce7", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }}>
+                    ✓ {copiedNotice} 已复制到剪贴板！
+                  </span>
+                )}
               </div>
 
-              {/* 网络信息 */}
-              <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0d9488", borderBottom: "1px solid #ccfbf1", paddingBottom: 4 }}>
-                🌐 网络与 IP 矩阵
-              </h5>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                  <span style={{ color: "#64748b", display: "block" }}>私有IP（业务IP）:</span>
-                  <code style={{ fontSize: 13, color: "#2563eb", fontWeight: 600 }}>{detailAsset.privateIp || detailAsset.ip || "-"}</code>
-                </div>
-                <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                  <span style={{ color: "#64748b", display: "block" }}>内大网IP:</span>
-                  <code style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>{detailAsset.internalWanIp || "-"}</code>
-                </div>
-                <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                  <span style={{ color: "#64748b", display: "block" }}>VIP 地址:</span>
-                  <code style={{ fontSize: 13, color: "#7c3aed", fontWeight: 600 }}>{detailAsset.vip || "-"}</code>
-                </div>
-                <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                  <span style={{ color: "#64748b", display: "block" }}>EIP / 公网IP:</span>
-                  <code style={{ fontSize: 13, color: "#ea580c", fontWeight: 600 }}>{detailAsset.eip || detailAsset.publicIp || "-"}</code>
-                </div>
-              </div>
+              {/* TAB 1: 硬件规格与OS */}
+              {detailTab === "spec" && (
+                <div>
+                  {/* 基本信息 */}
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0284c7", borderBottom: "1px solid #e0f2fe", paddingBottom: 4 }}>
+                    📋 项目与基础归属 (台账基本信息)
+                  </h5>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
+                    <div><span style={{ color: "#64748b" }}>项目名称:</span> <strong style={{ color: "#1d4ed8" }}>{detailAsset.projectName || "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>客户名称:</span> <strong>{detailAsset.customerName || "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>环境类型:</span> <strong>{detailAsset.env || "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>承载云商:</span> <strong style={{ color: "#2563eb" }}>{detailAsset.cloudVendor || "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>安全区域:</span> <strong>{detailAsset.regionName || "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>设备大类:</span> <strong>{detailAsset.category || "服务器"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>设备类型:</span> <strong>{detailAsset.deviceType || "虚拟机"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>资产形态:</span> <strong>{detailAsset._kind === "physical" ? "实体物理服务器" : "虚拟计算节点"}</strong></div>
+                  </div>
 
-              {/* 规格配置 */}
-              <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#d97706", borderBottom: "1px solid #fef3c7", paddingBottom: 4 }}>
-                ⚡ 硬件规格与存储配额
-              </h5>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                <div><span style={{ color: "#64748b" }}>CPU 架构:</span> <strong>{detailAsset.cpuArch || "x86_64"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>CPU 核心数:</span> <strong style={{ color: "#b45309" }}>{detailAsset.cpuCores ? `${detailAsset.cpuCores} 核` : "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>内存容量:</span> <strong style={{ color: "#b45309" }}>{detailAsset.memoryGb ? `${detailAsset.memoryGb} GB` : "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>系统盘:</span> <strong>{detailAsset.systemDiskGb ? `${detailAsset.systemDiskGb} GB` : "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>数据盘:</span> <strong>{detailAsset.dataDiskGb ? `${detailAsset.dataDiskGb} GB` : "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>共享磁盘:</span> <strong>{detailAsset.sharedDiskGb ? `${detailAsset.sharedDiskGb} GB` : "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>对象存储:</span> <strong>{detailAsset.objectStorageGb ? `${detailAsset.objectStorageGb} GB` : "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>远程连接端口:</span> <strong style={{ fontFamily: "monospace" }}>{detailAsset.remotePort || 22}</strong></div>
-              </div>
+                  {/* 网络信息 */}
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0d9488", borderBottom: "1px solid #ccfbf1", paddingBottom: 4 }}>
+                    🌐 网络与 IP 矩阵
+                  </h5>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
+                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
+                      <span style={{ color: "#64748b", display: "block" }}>私有IP（业务IP）:</span>
+                      <code style={{ fontSize: 13, color: "#2563eb", fontWeight: 600 }}>{detailAsset.privateIp || detailAsset.ip || "-"}</code>
+                    </div>
+                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
+                      <span style={{ color: "#64748b", display: "block" }}>内大网IP:</span>
+                      <code style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>{detailAsset.internalWanIp || "-"}</code>
+                    </div>
+                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
+                      <span style={{ color: "#64748b", display: "block" }}>VIP 地址:</span>
+                      <code style={{ fontSize: 13, color: "#7c3aed", fontWeight: 600 }}>{detailAsset.vip || "-"}</code>
+                    </div>
+                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
+                      <span style={{ color: "#64748b", display: "block" }}>EIP / 公网IP:</span>
+                      <code style={{ fontSize: 13, color: "#ea580c", fontWeight: 600 }}>{detailAsset.eip || detailAsset.publicIp || "-"}</code>
+                    </div>
+                  </div>
 
-              {/* 操作系统 */}
-              <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#16a34a", borderBottom: "1px solid #dcfce7", paddingBottom: 4 }}>
-                🐧 操作系统发行版及内核
-              </h5>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                <div><span style={{ color: "#64748b" }}>OS 发行版:</span> <strong>{detailAsset.osFamily || "-"}</strong></div>
-                <div><span style={{ color: "#64748b" }}>OS 完整版本:</span> <strong>{detailAsset.osVersion || "-"}</strong></div>
-                <div style={{ gridColumn: "span 2" }}>
-                  <span style={{ color: "#64748b" }}>系统内核版本:</span> 
-                  <code style={{ display: "block", marginTop: 4, background: "#f1f5f9", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
-                    {detailAsset.kernelVersion || "Linux Kernel"}
-                  </code>
+                  {/* 规格配置 */}
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#d97706", borderBottom: "1px solid #fef3c7", paddingBottom: 4 }}>
+                    ⚡ 硬件规格与存储配额
+                  </h5>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
+                    <div><span style={{ color: "#64748b" }}>CPU 架构:</span> <strong>{detailAsset.cpuArch || "x86_64"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>CPU 核心数:</span> <strong style={{ color: "#b45309" }}>{detailAsset.cpuCores ? `${detailAsset.cpuCores} 核` : "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>内存容量:</span> <strong style={{ color: "#b45309" }}>{detailAsset.memoryGb ? `${detailAsset.memoryGb} GB` : "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>系统盘:</span> <strong>{detailAsset.systemDiskGb ? `${detailAsset.systemDiskGb} GB` : "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>数据盘:</span> <strong>{detailAsset.dataDiskGb ? `${detailAsset.dataDiskGb} GB` : "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>共享磁盘:</span> <strong>{detailAsset.sharedDiskGb ? `${detailAsset.sharedDiskGb} GB` : "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>对象存储:</span> <strong>{detailAsset.objectStorageGb ? `${detailAsset.objectStorageGb} GB` : "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>远程连接端口:</span> <strong style={{ fontFamily: "monospace" }}>{detailAsset.remotePort || 22}</strong></div>
+                  </div>
+
+                  {/* 操作系统 */}
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#16a34a", borderBottom: "1px solid #dcfce7", paddingBottom: 4 }}>
+                    🐧 操作系统发行版及内核
+                  </h5>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
+                    <div><span style={{ color: "#64748b" }}>OS 发行版:</span> <strong>{detailAsset.osFamily || "-"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>OS 完整版本:</span> <strong>{detailAsset.osVersion || "-"}</strong></div>
+                    <div style={{ gridColumn: "span 2" }}>
+                      <span style={{ color: "#64748b" }}>系统内核版本:</span> 
+                      <code style={{ display: "block", marginTop: 4, background: "#f1f5f9", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
+                        {detailAsset.kernelVersion || "Linux Kernel"}
+                      </code>
+                    </div>
+                  </div>
+
+                  {/* 备注 */}
+                  {detailAsset.remarks && (
+                    <div style={{ background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 6, fontSize: 12 }}>
+                      <strong style={{ color: "#92400e" }}>📌 项目资产台账备注：</strong>
+                      <span style={{ color: "#78350f", marginLeft: 6 }}>{detailAsset.remarks}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* 备注 */}
-              {detailAsset.remarks && (
-                <div style={{ background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 6, fontSize: 12 }}>
-                  <strong style={{ color: "#92400e" }}>📌 项目资产台账备注：</strong>
-                  <span style={{ color: "#78350f", marginLeft: 6 }}>{detailAsset.remarks}</span>
+              {/* TAB 2: 软件·中间件·数据库 */}
+              {detailTab === "software" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <h5 style={{ margin: 0, fontSize: 14, color: "#0f766e" }}>
+                        🧩 本节点运行软件与服务组件 ({currentAssetSoftwares.length})
+                      </h5>
+                      <small style={{ color: "#64748b" }}>包含已纳管的数据库实例、应用中间件、运行库与关键插件</small>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={{ fontSize: 11, padding: "4px 10px", borderColor: "#99f6e4", background: "#f0fdfa", color: "#0d9488", fontWeight: 600 }}
+                      onClick={() => setShowAddSoftForm(!showAddSoftForm)}
+                    >
+                      {showAddSoftForm ? "✕ 取消登记" : "＋ 登记新软件组件"}
+                    </button>
+                  </div>
+
+                  {/* Inline Add Software Form */}
+                  {showAddSoftForm && (
+                    <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 6, padding: 12, marginBottom: 14 }}>
+                      <strong style={{ fontSize: 12, color: "#0f766e", display: "block", marginBottom: 8 }}>
+                        📝 登记新运行软件（绑定至本节点）
+                      </strong>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 12 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>软件名称*</label>
+                          <input 
+                            placeholder="如 MySQL, Nginx, JDK" 
+                            value={newSoftDraft.name} 
+                            onChange={e => setNewSoftDraft({ ...newSoftDraft, name: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>分类*</label>
+                          <select 
+                            value={newSoftDraft.category} 
+                            onChange={e => setNewSoftDraft({ ...newSoftDraft, category: e.target.value as any })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          >
+                            <option value="database">🗄️ 数据库 (Database)</option>
+                            <option value="middleware">⚙️ 中间件 (Middleware)</option>
+                            <option value="web_server">🌐 Web服务 (Web Server)</option>
+                            <option value="plugin">☕ 运行库/插件 (Runtime/Plugin)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>版本号*</label>
+                          <input 
+                            placeholder="如 8.0.32, 1.24.0" 
+                            value={newSoftDraft.version} 
+                            onChange={e => setNewSoftDraft({ ...newSoftDraft, version: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>监听端口</label>
+                          <input 
+                            placeholder="如 3306, 80, 8080" 
+                            value={newSoftDraft.port} 
+                            onChange={e => setNewSoftDraft({ ...newSoftDraft, port: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>安装部署路径</label>
+                          <input 
+                            placeholder="如 /usr/local/nginx" 
+                            value={newSoftDraft.installPath} 
+                            onChange={e => setNewSoftDraft({ ...newSoftDraft, installPath: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>业务用途 / 备注</label>
+                          <input 
+                            placeholder="如 核心业务主库" 
+                            value={newSoftDraft.remarks} 
+                            onChange={e => setNewSoftDraft({ ...newSoftDraft, remarks: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", marginTop: 8 }}>
+                        <button 
+                          type="button" 
+                          className="btn-primary"
+                          style={{ padding: "4px 12px", fontSize: 12 }}
+                          onClick={() => {
+                            if (!newSoftDraft.name.trim() || !newSoftDraft.version.trim()) {
+                              alert("请填写软件名称与版本号！");
+                              return;
+                            }
+                            const newComponent: SoftwareComponent = {
+                              id: `soft-${Date.now()}`,
+                              assetId: detailAsset.id,
+                              assetName: detailAsset.name,
+                              assetIp: detailAsset.privateIp || detailAsset.ip,
+                              projectId: detailAsset.projectId || "prj-001",
+                              projectName: detailAsset.projectName || "工会互助保险信息系统",
+                              category: newSoftDraft.category,
+                              name: newSoftDraft.name,
+                              version: newSoftDraft.version,
+                              port: newSoftDraft.port || "-",
+                              installPath: newSoftDraft.installPath || "-",
+                              configPath: newSoftDraft.configPath || "-",
+                              status: "running",
+                              remarks: newSoftDraft.remarks || "管理员手工登记"
+                            };
+                            onAddSoftware?.(newComponent);
+                            setShowAddSoftForm(false);
+                            setNewSoftDraft({ name: "", category: "database", version: "", port: "", installPath: "", configPath: "", remarks: "" });
+                          }}
+                        >
+                          确认登记组件
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Softwares Table */}
+                  {currentAssetSoftwares.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", background: "#f8fafc", borderRadius: 6 }}>
+                      暂未为该节点登记运行软件与中间件组件，点击上方「＋ 登记新软件组件」添加。
+                    </div>
+                  ) : (
+                    <div style={{ border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
+                            <th style={{ padding: "8px 10px" }}>分类</th>
+                            <th style={{ padding: "8px 10px" }}>软件名称及实例</th>
+                            <th style={{ padding: "8px 10px" }}>核心版本号</th>
+                            <th style={{ padding: "8px 10px" }}>监听端口</th>
+                            <th style={{ padding: "8px 10px" }}>部署目录 / 配置文件</th>
+                            <th style={{ padding: "8px 10px" }}>运行状态</th>
+                            <th style={{ padding: "8px 10px" }}>业务备注</th>
+                            <th style={{ padding: "8px 10px", width: 50, textAlign: "center" }}>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {currentAssetSoftwares.map(soft => {
+                            const badgeInfo = soft.category === "database"
+                              ? { label: "🗄️ 数据库", bg: "#e0e7ff", text: "#3730a3" }
+                              : soft.category === "middleware"
+                              ? { label: "⚙️ 中间件", bg: "#fef3c7", text: "#92400e" }
+                              : soft.category === "web_server"
+                              ? { label: "🌐 Web服务", bg: "#e0f2fe", text: "#0369a1" }
+                              : { label: "☕ 运行库/插件", bg: "#dcfce7", text: "#15803d" };
+
+                            return (
+                              <tr key={soft.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "8px 10px" }}>
+                                  <span style={{ background: badgeInfo.bg, color: badgeInfo.text, padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                                    {badgeInfo.label}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "8px 10px", fontWeight: 700, color: "#1e293b" }}>
+                                  {soft.name}
+                                </td>
+                                <td style={{ padding: "8px 10px" }}>
+                                  <code style={{ background: "#f1f5f9", padding: "1px 5px", borderRadius: 3, fontSize: 11, color: "#2563eb", fontWeight: 600 }}>
+                                    {soft.version}
+                                  </code>
+                                </td>
+                                <td style={{ padding: "8px 10px", fontFamily: "monospace", color: "#d97706", fontWeight: 600 }}>
+                                  {soft.port || "-"}
+                                </td>
+                                <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#64748b" }} title={soft.installPath}>
+                                  {soft.installPath || "-"}
+                                </td>
+                                <td style={{ padding: "8px 10px" }}>
+                                  <span style={{ color: soft.status === "running" ? "#16a34a" : "#dc2626", fontWeight: 600, fontSize: 11 }}>
+                                    ● {soft.status === "running" ? "活跃运行" : "停止"}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "8px 10px", color: "#64748b" }}>
+                                  {soft.remarks || "-"}
+                                </td>
+                                <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => onDeleteSoftware?.(soft.id)}
+                                    style={{ border: "none", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12 }}
+                                    title="删除此软件实例"
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: 登录与运维通道 */}
+              {detailTab === "ops" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <h5 style={{ margin: 0, fontSize: 14, color: "#6d28d9" }}>
+                        🚀 登录系统与运维直连通道 ({currentAssetChannels.length})
+                      </h5>
+                      <small style={{ color: "#64748b" }}>包含业务管理后台直达链接、SSH/RDP快速登录指令与堡垒机入口</small>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={{ fontSize: 11, padding: "4px 10px", borderColor: "#ddd6fe", background: "#f5f3ff", color: "#7c3aed", fontWeight: 600 }}
+                      onClick={() => setShowAddChanForm(!showAddChanForm)}
+                    >
+                      {showAddChanForm ? "✕ 取消添加" : "＋ 添加运维通道/登录链接"}
+                    </button>
+                  </div>
+
+                  {/* Inline Add Channel Form */}
+                  {showAddChanForm && (
+                    <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 6, padding: 12, marginBottom: 14 }}>
+                      <strong style={{ fontSize: 12, color: "#6d28d9", display: "block", marginBottom: 8 }}>
+                        📝 录入新运维通道或登录入口
+                      </strong>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 8, fontSize: 12 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>通道名称*</label>
+                          <input 
+                            placeholder="如 业务管理后台 / SSH 直连" 
+                            value={newChanDraft.name} 
+                            onChange={e => setNewChanDraft({ ...newChanDraft, name: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>通道类型*</label>
+                          <select 
+                            value={newChanDraft.channelType} 
+                            onChange={e => setNewChanDraft({ ...newChanDraft, channelType: e.target.value as any })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          >
+                            <option value="web_link">🌐 Web 页面登录链接</option>
+                            <option value="ssh">💻 SSH 远程连接命令</option>
+                            <option value="rdp">🖥️ Windows 远程桌面 (RDP)</option>
+                            <option value="jumpserver">⚡ JumpServer 堡垒机快速协议</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>目标地址 / 命令行*</label>
+                          <input 
+                            placeholder="https://... 或 ssh root@... -p 22" 
+                            value={newChanDraft.urlOrTarget} 
+                            onChange={e => setNewChanDraft({ ...newChanDraft, urlOrTarget: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginTop: 6 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>账号与认证说明</label>
+                          <input 
+                            placeholder="如 admin / 证书免密 (无明文密码)" 
+                            value={newChanDraft.accountNote} 
+                            onChange={e => setNewChanDraft({ ...newChanDraft, accountNote: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: "#475569" }}>备注说明</label>
+                          <input 
+                            placeholder="如 生产统一认证入口" 
+                            value={newChanDraft.remarks} 
+                            onChange={e => setNewChanDraft({ ...newChanDraft, remarks: e.target.value })}
+                            style={{ width: "100%", fontSize: 12, padding: 4 }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", marginTop: 8 }}>
+                        <button 
+                          type="button" 
+                          className="btn-primary"
+                          style={{ padding: "4px 12px", fontSize: 12 }}
+                          onClick={() => {
+                            if (!newChanDraft.name.trim() || !newChanDraft.urlOrTarget.trim()) {
+                              alert("请填写通道名称与目标地址！");
+                              return;
+                            }
+                            const newChan: OpsChannel = {
+                              id: `chan-${Date.now()}`,
+                              assetId: detailAsset.id,
+                              assetName: detailAsset.name,
+                              assetIp: detailAsset.privateIp || detailAsset.ip,
+                              projectId: detailAsset.projectId || "prj-001",
+                              projectName: detailAsset.projectName || "工会互助保险信息系统",
+                              channelType: newChanDraft.channelType,
+                              name: newChanDraft.name,
+                              urlOrTarget: newChanDraft.urlOrTarget,
+                              accountNote: newChanDraft.accountNote || "运维授权账号",
+                              remarks: newChanDraft.remarks || "管理员维护通道"
+                            };
+                            onAddChannel?.(newChan);
+                            setShowAddChanForm(false);
+                            setNewChanDraft({ name: "", channelType: "web_link", urlOrTarget: "", accountNote: "", remarks: "" });
+                          }}
+                        >
+                          确认添加通道
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Channel Cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+                    {currentAssetChannels.map(chan => {
+                      const isWeb = chan.channelType === "web_link";
+                      const isSsh = chan.channelType === "ssh";
+                      const isRdp = chan.channelType === "rdp";
+                      const isVpn = chan.channelType === "vpn";
+
+                      return (
+                        <div key={chan.id} style={{
+                          border: "1px solid #e2e8f0",
+                          borderRadius: 6,
+                          padding: "10px 14px",
+                          background: isWeb ? "#faf5ff" : isSsh ? "#f8fafc" : "#f0fdf4",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 12
+                        }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <span style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                                background: isWeb ? "#ede9fe" : isSsh ? "#e2e8f0" : "#dcfce7",
+                                color: isWeb ? "#6d28d9" : isSsh ? "#334155" : "#15803d"
+                              }}>
+                                {isWeb ? "🌐 网页链接" : isSsh ? "💻 SSH终端" : isRdp ? "🖥️ 远程桌面" : "🛡️ VPN隧道"}
+                              </span>
+                              <strong style={{ fontSize: 13, color: "#1e293b" }}>{chan.name}</strong>
+                              {chan.accountNote && (
+                                <span style={{ fontSize: 11, color: "#64748b" }}>· 账号: {chan.accountNote}</span>
+                              )}
+                            </div>
+
+                            <div style={{ fontFamily: "monospace", fontSize: 12, color: isWeb ? "#6d28d9" : "#0f172a", background: "#fff", border: "1px solid #cbd5e1", padding: "4px 8px", borderRadius: 4, wordBreak: "break-all" }}>
+                              {chan.urlOrTarget}
+                            </div>
+                            {chan.remarks && (
+                              <small style={{ color: "#64748b", display: "block", marginTop: 4 }}>{chan.remarks}</small>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            {isWeb && (
+                              <button 
+                                type="button" 
+                                className="btn-primary" 
+                                style={{ padding: "4px 10px", fontSize: 11, background: "#7c3aed", borderColor: "#6d28d9" }}
+                                onClick={() => window.open(chan.urlOrTarget, "_blank")}
+                              >
+                                🔗 立即打开
+                              </button>
+                            )}
+                            <button 
+                              type="button" 
+                              className="btn-secondary" 
+                              style={{ padding: "4px 10px", fontSize: 11 }}
+                              onClick={() => copyToClipboard(chan.urlOrTarget, chan.name)}
+                            >
+                              📋 复制内容
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => onDeleteChannel?.(chan.id)}
+                              style={{ border: "none", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12, padding: "0 4px" }}
+                              title="移除此通道"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: VPN 专网通道 */}
+              {detailTab === "vpn" && (
+                <div>
+                  <h5 style={{ margin: "0 0 10px", fontSize: 14, color: "#ea580c" }}>
+                    🛡️ 所属项目 VPN 专网通道配置
+                  </h5>
+                  <p style={{ margin: "0 0 14px", fontSize: 12, color: "#64748b" }}>
+                    运维人员需在外部通过安全 VPN 隧道连接至各政务云/专区，方可访问本机器私网业务与终端。
+                  </p>
+
+                  {currentProjectVpn ? (
+                    <div style={{
+                      background: "#fffaf5",
+                      border: "1px solid #fed7aa",
+                      borderRadius: 8,
+                      padding: 16
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                        <span style={{ fontSize: 20 }}>🛡️</span>
+                        <div>
+                          <strong style={{ fontSize: 15, color: "#9a3412" }}>{currentProjectVpn.name}</strong>
+                          <span style={{ fontSize: 11, color: "#c2410c", background: "#ffedd5", padding: "1px 6px", borderRadius: 4, marginLeft: 8 }}>
+                            {currentProjectVpn.vpnClientType || "SSL VPN"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 14 }}>
+                        <div>
+                          <span style={{ color: "#64748b", display: "block" }}>所属项目:</span>
+                          <strong>{detailAsset.projectName}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#64748b", display: "block" }}>承载云厂商 / 区域:</span>
+                          <strong style={{ color: "#2563eb" }}>{detailAsset.cloudVendor} ({detailAsset.regionName || "互联网专区"})</strong>
+                        </div>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <span style={{ color: "#64748b", display: "block", marginBottom: 2 }}>VPN 认证网关地址:</span>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <code style={{ fontSize: 13, background: "#fff", border: "1px solid #fdba74", padding: "4px 8px", borderRadius: 4, color: "#c2410c", fontWeight: 600, flex: 1 }}>
+                              {currentProjectVpn.vpnGateway || currentProjectVpn.urlOrTarget}
+                            </code>
+                            <button 
+                              type="button" 
+                              className="btn-primary" 
+                              style={{ padding: "4px 10px", fontSize: 11, background: "#ea580c", borderColor: "#c2410c" }}
+                              onClick={() => window.open(currentProjectVpn.vpnGateway || currentProjectVpn.urlOrTarget, "_blank")}
+                            >
+                              🔗 前往认证网关
+                            </button>
+                            <button 
+                              type="button" 
+                              className="btn-secondary" 
+                              style={{ padding: "4px 10px", fontSize: 11 }}
+                              onClick={() => copyToClipboard(currentProjectVpn.vpnGateway || currentProjectVpn.urlOrTarget, "VPN网关地址")}
+                            >
+                              📋 复制地址
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <span style={{ color: "#64748b", display: "block" }}>拨号账号与策略说明:</span>
+                          <div style={{ background: "#fff", border: "1px solid #fed7aa", padding: "6px 10px", borderRadius: 4, color: "#7c2d12" }}>
+                            {currentProjectVpn.accountNote || "运维组动态令牌统一口令认证"}
+                          </div>
+                        </div>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <span style={{ color: "#64748b", display: "block" }}>路由可达专网网段:</span>
+                          <code style={{ fontSize: 12, background: "#fff", border: "1px solid #e2e8f0", padding: "4px 8px", borderRadius: 4, display: "block", color: "#334155" }}>
+                            {currentProjectVpn.vpnNetworkSegment || "192.141.20.0/23, 10.200.0.0/16"}
+                          </code>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: "1px dashed #fdba74", paddingTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
+                        <span style={{ fontSize: 11, color: "#7c2d12", fontWeight: 600 }}>客户端下载指引:</span>
+                        <a 
+                          href="https://www.sangfor.com.cn/" 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          [📥 Windows 客户端]
+                        </a>
+                        <a 
+                          href="https://www.sangfor.com.cn/" 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          [📥 信创 Linux 客户端]
+                        </a>
+                        <a 
+                          href="https://www.sangfor.com.cn/" 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          [📥 移动端 App]
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", background: "#f8fafc", borderRadius: 6 }}>
+                      该项目暂未配置专用 VPN 专网通道信息。
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1098,6 +1855,74 @@ export default function HostManagement({
           </form>
         </div>
       )}
+    
+      {/* ================= MODAL: PROJECT VPN FULL VIEW ================= */}
+      {showProjectVpnModal && currentProjectVpn && (
+        <div className="cmdb-modal-mask">
+          <div className="cmdb-modal" style={{ maxWidth: 640, width: "95%" }}>
+            <div className="cmdb-modal-header" style={{ background: "#9a3412", color: "#fff", borderBottom: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 18 }}>🛡️</span>
+                <h3 style={{ margin: 0, color: "#fff", fontSize: 16 }}>{currentProjectVpn.name}</h3>
+              </div>
+              <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setShowProjectVpnModal(false)}>×</button>
+            </div>
+            <div className="cmdb-modal-body" style={{ padding: 20, fontSize: 12 }}>
+              <div style={{ background: "#fffaf5", border: "1px solid #fed7aa", padding: 14, borderRadius: 6, marginBottom: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div><span style={{ color: "#64748b" }}>所属项目:</span> <strong>{currentProject?.name}</strong></div>
+                  <div><span style={{ color: "#64748b" }}>承载云厂商:</span> <strong style={{ color: "#2563eb" }}>{currentProject?.cloudVendor}</strong></div>
+                  <div><span style={{ color: "#64748b" }}>VPN 客户端:</span> <strong style={{ color: "#c2410c" }}>{currentProjectVpn.vpnClientType}</strong></div>
+                  <div><span style={{ color: "#64748b" }}>所属环境:</span> <strong>{currentProject?.env}环境</strong></div>
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <span style={{ color: "#64748b", display: "block", marginBottom: 2 }}>VPN 网关认证地址:</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <code style={{ fontSize: 13, background: "#fff", border: "1px solid #fdba74", padding: "4px 8px", borderRadius: 4, color: "#c2410c", fontWeight: 600, flex: 1 }}>
+                      {currentProjectVpn.vpnGateway}
+                    </code>
+                    <button 
+                      type="button" 
+                      className="btn-primary" 
+                      style={{ padding: "4px 10px", fontSize: 11, background: "#ea580c", borderColor: "#c2410c" }}
+                      onClick={() => window.open(currentProjectVpn.vpnGateway, "_blank")}
+                    >
+                      🔗 前往网关
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={{ padding: "4px 10px", fontSize: 11 }}
+                      onClick={() => copyToClipboard(currentProjectVpn.vpnGateway || "", "VPN网关地址")}
+                    >
+                      📋 复制
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <span style={{ color: "#64748b", display: "block", marginBottom: 2 }}>拨号账号与策略:</span>
+                  <div style={{ background: "#fff", border: "1px solid #fed7aa", padding: 6, borderRadius: 4, color: "#7c2d12" }}>
+                    {currentProjectVpn.accountNote}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ color: "#64748b", display: "block", marginBottom: 2 }}>路由专网段:</span>
+                  <code style={{ background: "#fff", border: "1px solid #e2e8f0", padding: 4, borderRadius: 4, display: "block" }}>
+                    {currentProjectVpn.vpnNetworkSegment}
+                  </code>
+                </div>
+              </div>
+            </div>
+            <div className="cmdb-modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setShowProjectVpnModal(false)}>关 闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

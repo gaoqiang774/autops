@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.1.3";
+export const APP_VERSION = "1.2.0";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.2.0",
+    date: "2026-09-18",
+    type: "module",
+    title: "系统软件（数据库/中间件/插件）与运维通道（登录链接/运维工具/VPN）全景资产管理",
+    description: "资产模型升级为四层全景拓扑；设备详情弹窗重构为4个Tab标签页（硬件规格与OS、软件中间件数据库、登录与运维通道、VPN专网接入）；列表增加软件栈微徽章；新增项目专网VPN直达弹窗、Web链接直跳与一键复制SSH命令。"
+  },
   {
     version: "1.1.3",
     date: "2026-09-18",
