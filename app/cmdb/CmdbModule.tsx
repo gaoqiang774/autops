@@ -104,6 +104,42 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
     }
   }
 
+  // Project Management
+  function handleAddProject(newProject: ProjectGroup) {
+    setProjects(prev => [newProject, ...prev]);
+  }
+
+  // VM Host Update
+  function handleUpdateVm(updatedVm: VmHost) {
+    setVms(prev => {
+      const next = prev.map(v => v.id === updatedVm.id ? updatedVm : v);
+      setTimeout(() => {
+        recalculateProjectStats(next, hosts, switches);
+      }, 0);
+      return next;
+    });
+  }
+
+  // Delete Unified Asset (VM, Physical Host, or Switch)
+  function handleDeleteUnifiedAsset(assetId: string, kind: "physical" | "vm" | "switch" = "vm") {
+    let nextVms = vms;
+    let nextHosts = hosts;
+    let nextSwitches = switches;
+
+    if (kind === "physical") {
+      nextHosts = hosts.filter(h => h.id !== assetId);
+      setHosts(nextHosts);
+    } else if (kind === "switch") {
+      nextSwitches = switches.filter(s => s.id !== assetId);
+      setSwitches(nextSwitches);
+    } else {
+      nextVms = vms.filter(v => v.id !== assetId);
+      setVms(nextVms);
+    }
+
+    recalculateProjectStats(nextVms, nextHosts, nextSwitches);
+  }
+
   // Recalculate all project statistics dynamically based on current unique devices
   function recalculateProjectStats(updatedVms: VmHost[], updatedHosts: PhysicalHost[], updatedSwitches: SwitchDevice[]) {
     const projMap: Record<string, { total: number; phy: number; vm: number; net: number; cores: number; mem: number; disk: number; xc: number }> = {};
@@ -293,6 +329,9 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
           onDeleteHost={handleDeleteHost}
           onAddVm={handleAddVm}
           onDeleteVm={handleDeleteVm}
+          onUpdateVm={handleUpdateVm}
+          onDeleteUnifiedAsset={handleDeleteUnifiedAsset}
+          onAddProject={handleAddProject}
           onBatchImportAssets={handleBatchImportAssets}
           onDeduplicateAssets={handleDeduplicateAssets}
         />

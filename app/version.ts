@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.4.0";
+export const APP_VERSION = "1.5.0";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.5.0",
+    date: "2026-09-18",
+    type: "module",
+    title: "新增项目资产修改、录入、删除与新项目录入完整生命周期管理",
+    description: "在 CMDB 项目资产模块中全面落地增删改闭环：新增「＋ 录入新项目」功能，支持创建业务项目并同步容量基线；资产表格操作列上线「✏️修改」编辑模态框（回显20+项台账属性即时保存）与「🗑️删除」二次确认注销功能；完善资产录入表单并联动大盘指标实时重算。"
+  },
   {
     version: "1.4.0",
     date: "2026-09-18",
