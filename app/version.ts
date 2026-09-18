@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.2.0";
+export const APP_VERSION = "1.2.1";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.2.1",
+    date: "2026-09-18",
+    type: "bugfix",
+    title: "按照《信息资产台账-v340.xlsx》「02-硬件设备」导入全新真实资产数据",
+    description: "全面清理历史旧数据，全量接入最新 v340 台账 292 台真实计算/存储/网络设备，重塑 23 个项目组、9台物理宿主节点、279台虚拟机计算节点、530个系统软件组件及688个运维/VPN通道。"
+  },
   {
     version: "1.2.0",
     date: "2026-09-18",
