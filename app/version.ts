@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.2.1";
+export const APP_VERSION = "1.2.2";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.2.2",
+    date: "2026-09-18",
+    type: "bugfix",
+    title: "核准与对齐 Excel 台账设备总数 (292台)",
+    description: "核查排除了14台程序辅助生成的虚拟柜顶ToR交换机，严格将网络设备收敛为Excel登记的4台真实VIP/公网网络设备，系统资产总数严格与《信息资产台账-v340.xlsx》「02-硬件设备」的292台设备保持100%绝对一致。"
+  },
   {
     version: "1.2.1",
     date: "2026-09-18",

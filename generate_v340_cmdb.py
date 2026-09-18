@@ -638,55 +638,7 @@ print(f"- Switches/VIPs: {len(switches)}")
 print(f"- Software Components: {len(software_components)}")
 print(f"- Ops Channels: {len(ops_channels)}")
 
-# Add top switches for IDC cabinet management
-for cab in cabinets_def:
-    cab_id = cab['id']
-    room_id = cab['roomId']
-    switches.append({
-        'id': f'sw-tor-{cab_id}',
-        'seq': 9000,
-        'assetNo': f'TOR-{cab["code"]}',
-        'name': f'{cab["name"]} ToR交换机',
-        'roomId': room_id,
-        'roomName': next((r["name"] for r in rooms_def if r["id"] == room_id), ""),
-        'cabinetId': cab_id,
-        'startU': 41,
-        'uHeight': 2,
-        'ip': f'10.200.{(hash(cab_id) % 250) + 1}.1',
-        'brand': '华为',
-        'model': 'CloudEngine 6857-48S6CQ',
-        'role': '接入交换机',
-        'portCount': 48,
-        'activePorts': 24,
-        'status': 'online',
-        'businessId': 'prj-001',
-        'customerName': '北控伟仕保障团队',
-        'projectName': '基础设施保障',
-        'env': '生产',
-        'cloudVendor': '自建机房',
-        'regionName': '内网区',
-        'category': '网络',
-        'deviceType': '物理机',
-        'privateIp': f'10.200.{(hash(cab_id) % 250) + 1}.1',
-        'privateIpv6': None,
-        'internalWanIp': None,
-        'eip': None,
-        'vip': None,
-        'publicIp': None,
-        'cpuArch': 'ARM',
-        'cpuCores': 4,
-        'memoryGb': 8,
-        'systemDiskGb': 32,
-        'dataDiskGb': 0,
-        'sharedDiskGb': None,
-        'objectStorageGb': None,
-        'osFamily': 'VRP',
-        'osVersion': 'VRP V800R021',
-        'kernelVersion': '5.4.0',
-        'isXinchuang': '是',
-        'remotePort': 22,
-        'remarks': '机柜顶部双上行 100GE ToR 接入交换机'
-    })
+# Note: Synthetic ToR switches removed to strictly match 292 devices in Excel 02-硬件设备
 
 # Databases
 databases_def = [
