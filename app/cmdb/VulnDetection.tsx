@@ -917,8 +917,8 @@ export default function VulnDetection({
                           {item.deviceType || (isPhysical ? "物理机" : "虚拟机")}
                         </span>
                         <strong
-                          style={{ color: "#0f172a", cursor: "pointer" }}
-                          title="点击查看全量台账元数据"
+                          style={{ color: "#1d4ed8", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+                          title="点击查看全量台账元数据与安全详情"
                           onClick={() => setDetailAsset(item)}
                         >
                           {item.name}
@@ -968,7 +968,11 @@ export default function VulnDetection({
 
                     {/* IPs */}
                     <td>
-                      <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb" }}>
+                      <div 
+                        style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                        title="点击查看全量台账元数据与安全详情"
+                        onClick={() => setDetailAsset(item)}
+                      >
                         {item.privateIp || item.ip || "-"}
                       </div>
                       {item.internalWanIp && (
@@ -1031,11 +1035,11 @@ export default function VulnDetection({
                       <div style={{ display: "flex", justifyContent: "center", gap: 4 }}>
                         <button
                           className="btn-secondary"
-                          style={{ padding: "2px 6px", fontSize: 11 }}
+                          style={{ padding: "2px 6px", fontSize: 11, color: "#1d4ed8", borderColor: "#bfdbfe", background: "#eff6ff", fontWeight: 600 }}
                           onClick={() => setDetailAsset(item)}
-                          title="查看该设备的完整台账元数据"
+                          title="查看该设备的完整台账元数据与系统安全配置"
                         >
-                          档案
+                          📖 详情
                         </button>
                         <button
                           className="btn-secondary"
@@ -1520,20 +1524,43 @@ export default function VulnDetection({
                     <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                       <tr>
                         <th style={{ width: 40 }}>序号</th>
-                        <th style={{ width: 160 }}>设备名称</th>
+                        <th style={{ width: 150 }}>设备名称</th>
                         <th style={{ width: 130 }}>私有业务 IP</th>
-                        <th style={{ width: 140 }}>所属项目</th>
-                        <th style={{ width: 140 }}>系统与内核版本</th>
+                        <th style={{ width: 130 }}>所属项目</th>
+                        <th style={{ width: 130 }}>系统与内核版本</th>
                         <th style={{ width: 90 }}>安全威胁状态</th>
-                        <th style={{ width: 80 }}>公网暴露</th>
+                        <th style={{ width: 75 }}>公网暴露</th>
+                        <th style={{ width: 85, textAlign: "center" }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {vulnBatchAnalysis.matchedList.map((item, idx) => (
                         <tr key={item.asset.id}>
                           <td style={{ fontFamily: "monospace", color: "#64748b" }}>{idx + 1}</td>
-                          <td><strong>{item.asset.name}</strong></td>
-                          <td><code style={{ color: "#2563eb", fontWeight: 600 }}>{item.asset.privateIp || item.asset.ip || "-"}</code></td>
+                          <td>
+                            <strong
+                              style={{ color: "#1d4ed8", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                              onClick={() => {
+                                setDetailAsset(item.asset);
+                                setShowVulnIpModal(false);
+                              }}
+                              title="点击进入该设备的安全与台账详细信息档案"
+                            >
+                              {item.asset.name}
+                            </strong>
+                          </td>
+                          <td>
+                            <code
+                              style={{ color: "#2563eb", fontWeight: 600, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                              onClick={() => {
+                                setDetailAsset(item.asset);
+                                setShowVulnIpModal(false);
+                              }}
+                              title="点击进入该设备的详细档案"
+                            >
+                              {item.asset.privateIp || item.asset.ip || "-"}
+                            </code>
+                          </td>
                           <td>{item.asset.projectName}</td>
                           <td>{item.asset.osVersion || item.asset.os} <small style={{ color: "#94a3b8" }}>{item.asset.kernelVersion}</small></td>
                           <td>
@@ -1554,6 +1581,20 @@ export default function VulnDetection({
                             ) : (
                               <span style={{ color: "#16a34a" }}>仅内网</span>
                             )}
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              style={{ fontSize: 10, padding: "2px 7px", whiteSpace: "nowrap" }}
+                              onClick={() => {
+                                setDetailAsset(item.asset);
+                                setShowVulnIpModal(false);
+                              }}
+                              title="点击进入该设备的安全与台账详细信息档案"
+                            >
+                              📖 详情
+                            </button>
                           </td>
                         </tr>
                       ))}

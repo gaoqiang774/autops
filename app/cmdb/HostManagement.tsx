@@ -1196,8 +1196,37 @@ export default function HostManagement({
                 <strong style={{ fontSize: 13, color: "#1e40af" }}>
                   在当前选定项目【{currentProject?.name}】未找到 IP【{ipSearchKeyword}】，但已在其他项目中定位到 {crossProjectIpMatch.count} 台匹配设备！
                 </strong>
-                <div style={{ fontSize: 11, color: "#3b82f6", marginTop: 2 }}>
-                  涉及项目: {crossProjectIpMatch.projects.join("、")} · 匹配资产: {crossProjectIpMatch.matchedAssets.map(a => `${a.name} (${a.privateIp || a.ip})`).slice(0, 3).join(", ")}
+                <div style={{ fontSize: 11, color: "#3b82f6", marginTop: 4, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                  <span>涉及项目: {crossProjectIpMatch.projects.join("、")} · 匹配资产:</span>
+                  {crossProjectIpMatch.matchedAssets.map(a => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        const targetProj = projects.find(p => p.name === a.projectName);
+                        if (targetProj) setSelectedProjectId(targetProj.id);
+                        setDetailAsset(a);
+                        setDetailTab("spec");
+                      }}
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #93c5fd",
+                        borderRadius: 4,
+                        padding: "1px 6px",
+                        fontSize: 11,
+                        color: "#1d4ed8",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3
+                      }}
+                      title="点击直接打开该设备的详细信息档案"
+                    >
+                      <span>📖</span>
+                      <span>{a.name} ({a.privateIp || a.ip})</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1287,9 +1316,9 @@ export default function HostManagement({
                               {item.deviceType || (isPhysical ? "物理机" : "虚拟机")}
                             </span>
                             <strong 
-                              style={{ color: "#0f172a", cursor: "pointer" }}
-                              title="点击查看全量台账元数据"
-                              onClick={() => setDetailAsset(item)}
+                              style={{ color: "#1d4ed8", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+                              title="点击进入该设备的详细信息档案 (规格/软件/通道/VPN)"
+                              onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
                             >
                               {item.name}
                             </strong>
@@ -1346,7 +1375,11 @@ export default function HostManagement({
 
                         {/* IPs */}
                         <td>
-                          <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb" }}>
+                          <div 
+                            style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                            title="点击进入该设备的详细信息档案"
+                            onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
+                          >
                             {item.privateIp || item.ip || "-"}
                           </div>
                           {item.internalWanIp && (
@@ -1425,11 +1458,11 @@ export default function HostManagement({
                           <div style={{ display: "flex", justifyContent: "center", gap: 4 }}>
                             <button 
                               className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11 }}
+                              style={{ padding: "2px 6px", fontSize: 11, color: "#1d4ed8", borderColor: "#bfdbfe", background: "#eff6ff", fontWeight: 600 }}
                               onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
-                              title="查看资产规格与OS档案"
+                              title="查看该设备的详细信息档案 (硬件规格、操作系统、网络拓扑)"
                             >
-                              档案
+                              📖 详情
                             </button>
                             <button 
                               className="btn-secondary" 
@@ -3064,7 +3097,7 @@ export default function HostManagement({
                         <th style={{ width: 110 }}>内大网 / VIP</th>
                         <th style={{ width: 160 }}>所属项目 · 客户单位</th>
                         <th style={{ width: 120 }}>操作系统</th>
-                        <th style={{ width: 60, textAlign: "center" }}>定位</th>
+                        <th style={{ width: 120, textAlign: "center" }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3072,10 +3105,34 @@ export default function HostManagement({
                         <tr key={asset.id}>
                           <td style={{ fontFamily: "monospace", color: "#64748b" }}>{idx + 1}</td>
                           <td>
-                            <strong>{asset.name}</strong>
+                            <strong
+                              style={{ color: "#1d4ed8", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                              onClick={() => {
+                                const targetProj = projects.find(p => p.name === asset.projectName);
+                                if (targetProj) setSelectedProjectId(targetProj.id);
+                                setDetailAsset(asset);
+                                setDetailTab("spec");
+                                setShowIpModal(false);
+                              }}
+                              title="点击直接打开该设备的详细信息档案 (规格/软件/通道/VPN)"
+                            >
+                              {asset.name}
+                            </strong>
                           </td>
                           <td>
-                            <code style={{ color: "#2563eb", fontWeight: 600 }}>{asset.privateIp || asset.ip || "-"}</code>
+                            <code
+                              style={{ color: "#2563eb", fontWeight: 600, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                              onClick={() => {
+                                const targetProj = projects.find(p => p.name === asset.projectName);
+                                if (targetProj) setSelectedProjectId(targetProj.id);
+                                setDetailAsset(asset);
+                                setDetailTab("spec");
+                                setShowIpModal(false);
+                              }}
+                              title="点击直接打开该设备的详细信息档案"
+                            >
+                              {asset.privateIp || asset.ip || "-"}
+                            </code>
                           </td>
                           <td>
                             <code style={{ color: "#64748b" }}>{asset.internalWanIp || asset.vip || "-"}</code>
@@ -3086,23 +3143,40 @@ export default function HostManagement({
                           </td>
                           <td>{asset.osVersion || asset.os || "-"}</td>
                           <td style={{ textAlign: "center" }}>
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              style={{ fontSize: 10, padding: "2px 6px" }}
-                              onClick={() => {
-                                const targetProj = projects.find(p => p.name === asset.projectName);
-                                if (targetProj) setSelectedProjectId(targetProj.id);
-                                else setSelectedProjectId("all");
-                                setIpSearchKeyword(asset.privateIp || asset.ip || "");
-                                setIpSearchInput(asset.privateIp || asset.ip || "");
-                                setShowIpModal(false);
-                                setCurrentPage(1);
-                              }}
-                              title="点击在工作台定位并打开该设备"
-                            >
-                              定位
-                            </button>
+                            <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                style={{ fontSize: 10, padding: "2px 7px", whiteSpace: "nowrap" }}
+                                onClick={() => {
+                                  const targetProj = projects.find(p => p.name === asset.projectName);
+                                  if (targetProj) setSelectedProjectId(targetProj.id);
+                                  setDetailAsset(asset);
+                                  setDetailTab("spec");
+                                  setShowIpModal(false);
+                                }}
+                                title="立即打开该设备的详细信息档案 (规格/软件/通道/VPN)"
+                              >
+                                📖 详情
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ fontSize: 10, padding: "2px 6px", whiteSpace: "nowrap" }}
+                                onClick={() => {
+                                  const targetProj = projects.find(p => p.name === asset.projectName);
+                                  if (targetProj) setSelectedProjectId(targetProj.id);
+                                  else setSelectedProjectId("all");
+                                  setIpSearchKeyword(asset.privateIp || asset.ip || "");
+                                  setIpSearchInput(asset.privateIp || asset.ip || "");
+                                  setShowIpModal(false);
+                                  setCurrentPage(1);
+                                }}
+                                title="点击在工作台主列表中定位并筛选该设备"
+                              >
+                                📍 定位
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
