@@ -6,6 +6,7 @@ import {
   initialVms,
   initialSwitches,
   initialBusinesses,
+  initialCredentials,
   initialSoftwareComponents,
   initialOpsChannels,
   ProjectGroup,
