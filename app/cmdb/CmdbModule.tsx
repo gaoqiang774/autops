@@ -102,6 +102,27 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
     }
   }
 
+  function handleBatchImportAssets(newAssets: (VmHost & { isImported?: boolean })[]) {
+    setVms(prev => [...newAssets, ...prev]);
+    // Recalculate or increment project counts
+    const projCounts: Record<string, number> = {};
+    newAssets.forEach(a => {
+      const p = a.projectName || "未分类项目";
+      projCounts[p] = (projCounts[p] || 0) + 1;
+    });
+    setProjects(prev => prev.map(p => {
+      const extra = projCounts[p.name] || 0;
+      if (extra > 0) {
+        return {
+          ...p,
+          deviceCount: p.deviceCount + extra,
+          vmCount: p.vmCount + extra
+        };
+      }
+      return p;
+    }));
+  }
+
   // Handlers for Switch
   function handleAddSwitch(newSwitch: SwitchDevice) {
     setSwitches(prev => [...prev, newSwitch]);
@@ -149,6 +170,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
           onDeleteHost={handleDeleteHost}
           onAddVm={handleAddVm}
           onDeleteVm={handleDeleteVm}
+          onBatchImportAssets={handleBatchImportAssets}
         />
       )}
 

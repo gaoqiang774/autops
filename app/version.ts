@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.2.2";
+export const APP_VERSION = "1.3.0";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.3.0",
+    date: "2026-09-18",
+    type: "module",
+    title: "新增项目总览与项目内「02硬件」标准格式 Excel 导入与导出模块",
+    description: "在项目总览与每个独立项目中全面新增「📥 导入台账」与「📤 导出Excel (02硬件格式)」功能；导出严格对齐《信息资产台账-v340.xlsx》「02-硬件设备」sheet 的前4行分区表头与30列标准字段，支持按当前筛选搜索结果精准导出；导入支持拖拽上传、智能识别工作表、字段映射校验与预览入库。"
+  },
   {
     version: "1.2.2",
     date: "2026-09-18",

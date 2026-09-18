@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useMemo } from "react";
 import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, ProjectGroup, AssetMeta, SoftwareComponent, OpsChannel } from "../cmdbData";
+import { exportAssetsToExcel } from "./excelExport";
+import ImportModal from "./ImportModal";
 
 interface HostManagementProps {
   projects: ProjectGroup[];
@@ -18,6 +20,7 @@ interface HostManagementProps {
   onDeleteHost?: (id: string) => void;
   onAddVm: (v: VmHost) => void;
   onDeleteVm: (id: string) => void;
+  onBatchImportAssets?: (assets: (VmHost & { isImported?: boolean })[]) => void;
 }
 
 type UnifiedAsset = (PhysicalHost | VmHost | SwitchDevice) & {
@@ -39,12 +42,22 @@ export default function HostManagement({
   onAddHost,
   onDeleteHost,
   onAddVm,
-  onDeleteVm
+  onDeleteVm,
+  onBatchImportAssets
 }: HostManagementProps) {
   // Tabs & Modal States for Software, Ops Channels, and VPN
   const [detailTab, setDetailTab] = useState<"spec" | "software" | "ops" | "vpn">("spec");
   const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
   const [showAddSoftForm, setShowAddSoftForm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
+
+  function handleExportExcel() {
+    const scopeTitle = currentProject ? currentProject.name : "全量项目总览";
+    exportAssetsToExcel(displayedAssets, scopeTitle);
+    setToastNotice(`✓ 已成功导出 ${displayedAssets.length} 台资产到《02-硬件设备》Excel！`);
+    setTimeout(() => setToastNotice(null), 3500);
+  }
   const [newSoftDraft, setNewSoftDraft] = useState({
     name: "",
     category: "database" as "database" | "middleware" | "plugin" | "web_server",
@@ -555,6 +568,48 @@ export default function HostManagement({
                 </button>
               )}
 
+              {/* 📥 导入按钮 */}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowImportModal(true)}
+                style={{
+                  padding: "6px 12px",
+                  background: "#eff6ff",
+                  borderColor: "#93c5fd",
+                  color: "#1e40af",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5
+                }}
+                title={currentProject ? `导入 Excel 资产到【${currentProject.name}】` : "批量导入《信息资产台账》Excel 资产"}
+              >
+                <span>📥</span>
+                <span>{currentProject ? "导入台账到当前项目" : "导入台账"}</span>
+              </button>
+
+              {/* 📤 导出按钮 */}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleExportExcel}
+                style={{
+                  padding: "6px 12px",
+                  background: "#f8fafc",
+                  borderColor: "#cbd5e1",
+                  color: "#0f172a",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5
+                }}
+                title={`按照《信息资产台账-v340.xlsx》02硬件规范导出当前查询的 ${displayedAssets.length} 台资产`}
+              >
+                <span>📤</span>
+                <span>导出Excel (02硬件格式)</span>
+              </button>
+
               <button className="btn-primary" onClick={() => setShowAddModal(true)} style={{ padding: "8px 12px" }}>
                 ＋ 录入项目资产
               </button>
@@ -620,9 +675,31 @@ export default function HostManagement({
             )}
           </div>
 
-          <span style={{ fontSize: 12, color: "#64748b" }}>
-            共 <strong style={{ color: "#0f172a" }}>{displayedAssets.length}</strong> 台资产记录
-          </span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              共 <strong style={{ color: "#0f172a" }}>{displayedAssets.length}</strong> 台资产记录
+            </span>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleExportExcel}
+              style={{
+                fontSize: 11,
+                padding: "3px 8px",
+                background: "#f0fdf4",
+                borderColor: "#bbf7d0",
+                color: "#15803d",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4
+              }}
+              title={`导出当前筛选出的 ${displayedAssets.length} 台设备为《02-硬件设备》Excel`}
+            >
+              <span>📤</span>
+              <span>导出当前查询 ({displayedAssets.length}台)</span>
+            </button>
+          </div>
         </div>
 
         {/* Assets Table Container */}
@@ -1920,6 +1997,44 @@ export default function HostManagement({
               <button type="button" className="btn-secondary" onClick={() => setShowProjectVpnModal(false)}>关 闭</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Excel 台账导入弹窗 */}
+      {showImportModal && (
+        <ImportModal
+          targetProjectName={currentProject ? currentProject.name : null}
+          onClose={() => setShowImportModal(false)}
+          onConfirmImport={(imported) => {
+            if (onBatchImportAssets) {
+              onBatchImportAssets(imported);
+            }
+            setToastNotice(`✓ 成功导入 ${imported.length} 台设备到资产库！`);
+            setTimeout(() => setToastNotice(null), 3500);
+          }}
+        />
+      )}
+
+      {/* 全局操作浮层通知 */}
+      {toastNotice && (
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          background: "#0f172a",
+          color: "#fff",
+          padding: "10px 18px",
+          borderRadius: 8,
+          boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+          fontSize: 13,
+          fontWeight: 600,
+          zIndex: 99999,
+          display: "flex",
+          alignItems: "center",
+          gap: 8
+        }}>
+          <span style={{ color: "#4ade80", fontSize: 16 }}>✓</span>
+          <span>{toastNotice}</span>
         </div>
       )}
 
