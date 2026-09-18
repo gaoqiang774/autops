@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.1.2";
+export const APP_VERSION = "1.1.3";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.1.3",
+    date: "2026-09-18",
+    type: "bugfix",
+    title: "系统名称双行断句排布与图标清理",
+    description: "移除顶栏 ∞ 图标，将系统名称断句重构为双行展示：第一行「北控伟仕」，第二行「智能运维」，消除原文本折行截断问题。"
+  },
   {
     version: "1.1.2",
     date: "2026-09-17",
