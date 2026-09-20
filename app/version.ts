@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.9.0";
+export const APP_VERSION = "1.9.1";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.9.1",
+    date: "2026-09-20",
+    type: "bugfix",
+    title: "优化资产去重逻辑：前置导入期查重、支持手工核对与勾选导入、移除主界面去重按钮",
+    description: "1. 移除项目资产工作台顶部的「检测到台账中存在重复设备」告警条与「一键去重并校准台账」按钮；2. 将去重判别逻辑深度前置至 Excel 台账导入阶段，导入前自动并发检测库中历史设备与文件内部重复设备；3. 提供全套手工核验与自主选择功能，支持一键切换「仅选全新设备」、「勾选变更更新」、「仅选重复设备」或行级逐一勾选；4. 只有用户手工核对并勾选确认的设备才会正式执行导入入库，彻底杜绝历史重复污染。"
+  },
   {
     version: "1.9.0",
     date: "2026-09-19",

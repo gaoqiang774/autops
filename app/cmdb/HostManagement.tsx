@@ -143,28 +143,6 @@ export default function HostManagement({
     return [...pList, ...vList, ...sList].sort((a, b) => (a.seq || 9999) - (b.seq || 9999));
   }, [hosts, vms, switches]);
 
-  // Duplicate device detection across all assets
-  const duplicateCount = useMemo(() => {
-    const keys = new Set<string>();
-    let dups = 0;
-    for (const item of allAssets) {
-      const k = getAssetKey(item);
-      if (keys.has(k)) {
-        dups++;
-      } else {
-        keys.add(k);
-      }
-    }
-    return dups;
-  }, [allAssets]);
-
-  function handleTriggerDeduplicate() {
-    if (onDeduplicateAssets) {
-      const res = onDeduplicateAssets();
-      setToastNotice(`✨ 去重完成！已成功清理 ${res.removedCount} 台重复资产，项目台账已重新校准！`);
-      setTimeout(() => setToastNotice(null), 4000);
-    }
-  }
 
   // Add Project Modal State
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
@@ -1218,53 +1196,6 @@ export default function HostManagement({
           )}
         </div>
 
-        {/* Duplicate Warning & One-Click Cleanup Banner */}
-        {duplicateCount > 0 && (
-          <div style={{
-            background: "#fffbeb",
-            border: "1.5px solid #fcd34d",
-            borderRadius: 8,
-            padding: "10px 16px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            boxShadow: "0 2px 6px rgba(217, 119, 6, 0.08)",
-            animation: "fadeIn 0.3s ease"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20 }}>⚠️</span>
-              <div>
-                <strong style={{ fontSize: 13, color: "#92400e" }}>
-                  检测到台账中存在 {duplicateCount} 台重复设备（可能由导入历史重复文件引起）
-                </strong>
-                <div style={{ fontSize: 11, color: "#b45309", marginTop: 2 }}>
-                  系统已配备智能去重清洗引擎，点击右侧按钮即可基于「业务IP / 设备标识」快速去重合并，并自动校准各项目资产计数。
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleTriggerDeduplicate}
-              style={{
-                background: "#d97706",
-                borderColor: "#b45309",
-                color: "#fff",
-                fontWeight: 600,
-                fontSize: 12,
-                padding: "6px 14px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-                cursor: "pointer"
-              }}
-            >
-              <span>🧹</span>
-              <span>一键去重并校准台账</span>
-            </button>
-          </div>
-        )}
 
         {/* Filter Bar & Controls */}
         <div style={{
@@ -2830,7 +2761,7 @@ export default function HostManagement({
               onBatchImportAssets(imported, strategy, currentProject ? currentProject.name : null);
             }
             const strategyLabel = strategy === "upsert" ? "智能覆盖更新" : strategy === "skip" ? "仅新增(跳过重复)" : "全量替换";
-            setToastNotice(`✓ 执行完成 (${strategyLabel})：共处理 ${imported.length} 台设备！`);
+            setToastNotice(`✓ 执行完成 (${strategyLabel})：共成功导入 ${imported.length} 台选定设备！`);
             setTimeout(() => setToastNotice(null), 3500);
           }}
         />
