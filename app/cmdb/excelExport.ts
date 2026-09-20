@@ -55,7 +55,7 @@ export function assetToExcelRow(asset: AssetMeta | PhysicalHost | VmHost | Switc
     asset.env || "生产",                                   // 环境
     asset.cloudVendor || "联通云",                         // 云厂商
     asset.regionName || "政务外网区",                      // 区域名称
-    asset.name || (asset as any).hostname || `device-${index + 1}`, // 设备名称
+    (asset as any).name || (asset as any).hostname || `device-${index + 1}`, // 设备名称
     asset.category || "服务器",                            // 设备大类
     asset.deviceType || "虚拟机",                          // 设备类型
     (asset as any).roomName || "六里桥机房",               // 机房

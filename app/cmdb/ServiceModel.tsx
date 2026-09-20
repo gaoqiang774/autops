@@ -23,7 +23,6 @@ export default function ServiceModel({
 }: ServiceModelProps) {
   const [selectedBizId, setSelectedBizId] = useState<string>(businesses[0]?.id || "biz-1");
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [levelFilter, setLevelFilter] = useState("全部");
 
   const [inspectedNode, setInspectedNode] = useState<{
     title: string;
@@ -32,17 +31,16 @@ export default function ServiceModel({
     extra?: string;
   } | null>(null);
 
-  // Filter businesses by level and search
+  // Filter businesses by search
   const filteredBusinesses = useMemo(() => {
     return businesses.filter(b => {
-      if (levelFilter !== "全部" && b.level !== levelFilter) return false;
       if (searchKeyword.trim()) {
         const kw = searchKeyword.toLowerCase();
         return b.name.toLowerCase().includes(kw) || b.department.toLowerCase().includes(kw) || b.code.toLowerCase().includes(kw);
       }
       return true;
     });
-  }, [businesses, levelFilter, searchKeyword]);
+  }, [businesses, searchKeyword]);
 
   // Current selected business
   const currentBizIndex = useMemo(() => {
@@ -91,7 +89,7 @@ export default function ServiceModel({
   }, [switches, selectedBiz]);
 
   return (
-    <div className="cmdb-container" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="cmdb-container" style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: "100%", height: "auto", paddingBottom: 40 }}>
       {/* ================= 1. TOP CONTROL BAR (CLEAN & NON-OVERFLOWING) ================= */}
       <div style={{
         background: "#ffffff",
@@ -133,7 +131,7 @@ export default function ServiceModel({
           >
             {filteredBusinesses.map(b => (
               <option key={b.id} value={b.id}>
-                [{b.level}] {b.name} ({b.department})
+                {b.name} ({b.department})
               </option>
             ))}
           </select>
@@ -159,25 +157,14 @@ export default function ServiceModel({
           </div>
         </div>
 
-        {/* Right: Search & Level Filter */}
+        {/* Right: Search */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input 
             placeholder="搜索项目名称 / 客户单位..." 
             value={searchKeyword}
             onChange={e => setSearchKeyword(e.target.value)}
-            style={{ width: 200, fontSize: 12, padding: "5px 8px" }}
+            style={{ width: 220, fontSize: 12, padding: "5px 10px", borderRadius: 4, border: "1px solid #cbd5e1" }}
           />
-
-          <select 
-            value={levelFilter} 
-            onChange={e => setLevelFilter(e.target.value)}
-            style={{ fontSize: 12, padding: "5px 8px" }}
-          >
-            <option value="全部">全部项目等级</option>
-            <option value="核心 L1">核心 L1 项目</option>
-            <option value="重要 L2">重要 L2 项目</option>
-            <option value="通用 L3">通用 L3 项目</option>
-          </select>
 
           <span style={{ fontSize: 12, color: "#64748b" }}>
             共 {filteredBusinesses.length} 个业务系统
@@ -198,28 +185,9 @@ export default function ServiceModel({
           {/* Main Info */}
           <div style={{ flex: 1, minWidth: 280 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-              <span style={{
-                background: selectedBiz.level === "核心 L1" ? "#ef4444" : "#f59e0b",
-                color: "#fff",
-                fontSize: 11,
-                padding: "2px 8px",
-                borderRadius: 4,
-                fontWeight: 700
-              }}>
-                {selectedBiz.level}
-              </span>
-
               <h2 style={{ margin: 0, fontSize: 18, color: "#f8fafc", fontWeight: 700 }}>
                 {selectedBiz.name}
               </h2>
-
-              <span className="status-pill online" style={{ fontSize: 11, padding: "2px 8px" }}>
-                ● 全链路架构通畅 · 运行正常
-              </span>
-
-              <span style={{ fontSize: 11, color: "#38bdf8", background: "rgba(56,189,248,0.15)", padding: "2px 8px", borderRadius: 4 }}>
-                健康度: {selectedBiz.healthScore} 分
-              </span>
             </div>
 
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "#cbd5e1", lineHeight: 1.5 }}>
@@ -259,28 +227,37 @@ export default function ServiceModel({
       </div>
 
       {/* ================= 3. TOPOLOGY CANVAS SECTION ================= */}
-      <div className="topology-view" style={{ flex: 1, minHeight: 480 }}>
-        <header className="topology-header" style={{ marginBottom: 14 }}>
+      <div className="topology-view" style={{
+        height: "auto",
+        minHeight: "auto",
+        background: "linear-gradient(180deg, #0b132b 0%, #070c1b 100%)",
+        border: "1.5px solid #1e293b",
+        borderRadius: 14,
+        padding: "24px 26px 32px",
+        boxShadow: "0 10px 32px rgba(0, 0, 0, 0.45)",
+        position: "relative",
+        overflow: "visible",
+        marginBottom: 20
+      }}>
+        <header className="topology-header" style={{ marginBottom: 18, borderBottom: "1px solid rgba(148, 163, 184, 0.12)", paddingBottom: 14 }}>
           <div>
-            <h4 style={{ margin: 0, fontSize: 15, color: "#38bdf8" }}>
-              🕸 【{selectedBiz.name}】全链路 5 层架构依赖拓扑图
+            <h4 style={{ margin: 0, fontSize: 16, color: "#38bdf8", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>🕸</span>
+              <span>【{selectedBiz.name}】全链路 5 层架构依赖拓扑图</span>
             </h4>
-            <small style={{ color: "#94a3b8", display: "block", marginTop: 2 }}>
-              由业务应用层自顶向下贯通至基础设施层 · 点击任意节点卡片查看详细遥测与配额
-            </small>
           </div>
-          <span className="status-pill online" style={{ fontSize: 11 }}>
-            高可用集群架构 · 运行正常
-          </span>
         </header>
 
-        <div className="topology-layers">
+        <div className="topology-layers" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* LEVEL 1: BUSINESS SYSTEM */}
           <div>
-            <div className="topology-layer-title">LEVEL 1 · 业务应用系统层 (BUSINESS APPLICATION LAYER)</div>
+            <div className="topology-layer-title" style={{ color: "#38bdf8", fontWeight: 700 }}>
+              LEVEL 1 · 业务应用系统层 (BUSINESS APPLICATION LAYER)
+            </div>
             <div className="topology-nodes-row">
               <div 
                 className="topology-node-card"
+                style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1.5px solid #38bdf8" }}
                 onClick={() => setInspectedNode({
                   title: selectedBiz.name,
                   type: "核心业务应用",
@@ -288,23 +265,34 @@ export default function ServiceModel({
                   extra: `编码: ${selectedBiz.code} · 组织归属: ${selectedBiz.department} · 责任人: ${selectedBiz.owner}`
                 })}
               >
-                <div className="topology-node-icon app">🏛</div>
+                <div className="topology-node-icon app" style={{ fontSize: 20 }}>🏛</div>
                 <div className="topology-node-meta">
-                  <strong>{selectedBiz.name}</strong>
-                  <small>安全等级: {selectedBiz.level} · 核心平台</small>
+                  <strong style={{ fontSize: 14, color: "#f8fafc" }}>{selectedBiz.name}</strong>
+                  <small style={{ color: "#94a3b8" }}>核心业务生产系统</small>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Flow Connector 1 -> 2 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 2px 24px", color: "#38bdf8", fontSize: 11, fontWeight: 600 }}>
+            <span>↓</span>
+            <span style={{ background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.25)", padding: "2px 10px", borderRadius: 12 }}>
+              网关反向代理与 SLB 负载均衡分发链路
+            </span>
+          </div>
+
           {/* LEVEL 2: NETWORK & GATEWAY / LOAD BALANCER */}
           <div>
-            <div className="topology-layer-title">LEVEL 2 · 网络接入与高可用负载层 (GATEWAY & SLB LAYER)</div>
+            <div className="topology-layer-title" style={{ color: "#22c55e", fontWeight: 700 }}>
+              LEVEL 2 · 网络接入与高可用负载层 (GATEWAY & SLB LAYER)
+            </div>
             <div className="topology-nodes-row">
               {linkedSwitches.map(sw => (
                 <div 
                   key={sw.id} 
                   className="topology-node-card"
+                  style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1.5px solid rgba(34, 197, 94, 0.4)" }}
                   onClick={() => setInspectedNode({
                     title: sw.name,
                     type: "网络 / 负载均衡设备",
@@ -312,26 +300,35 @@ export default function ServiceModel({
                     extra: `品牌型号: ${sw.brand} ${sw.model} · 项目专有网络配置`
                   })}
                 >
-                  <div className="topology-node-icon net">🌐</div>
+                  <div className="topology-node-icon net" style={{ fontSize: 20 }}>🌐</div>
                   <div className="topology-node-meta">
-                    <strong>{sw.name}</strong>
-                    <small>{sw.ip} · {sw.role}</small>
+                    <strong style={{ color: "#f8fafc" }}>{sw.name}</strong>
+                    <small style={{ color: "#86efac" }}>{sw.ip} · {sw.role}</small>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Flow Connector 2 -> 3 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 2px 24px", color: "#60a5fa", fontSize: 11, fontWeight: 600 }}>
+            <span>↓</span>
+            <span style={{ background: "rgba(96,165,250,0.12)", border: "1px solid rgba(96,165,250,0.25)", padding: "2px 10px", borderRadius: 12 }}>
+              应用集群负载均衡流量分发 · 云主机运行态
+            </span>
+          </div>
+
           {/* LEVEL 3: VIRTUAL MACHINE APPLICATION NODES */}
           <div>
-            <div className="topology-layer-title">
+            <div className="topology-layer-title" style={{ color: "#60a5fa", fontWeight: 700 }}>
               LEVEL 3 · 虚拟云主机应用集群层 (ECS INSTANCES · 共 {linkedVms.length} 实例)
             </div>
-            <div className="topology-nodes-row" style={{ flexWrap: "wrap" }}>
+            <div className="topology-nodes-row" style={{ flexWrap: "wrap", gap: 10 }}>
               {linkedVms.slice(0, 10).map(vm => (
                 <div 
                   key={vm.id}
                   className="topology-node-card"
+                  style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1.5px solid rgba(96, 165, 250, 0.4)" }}
                   onClick={() => setInspectedNode({
                     title: vm.name,
                     type: "虚拟云服务器 (VM/ECS)",
@@ -339,10 +336,10 @@ export default function ServiceModel({
                     extra: `算力规格: ${vm.cpu} · 内存: ${vm.memory} · 磁盘: ${vm.disk} · 信创OS: ${vm.isXinchuang || "否"} · 端口: ${vm.remotePort || 22}`
                   })}
                 >
-                  <div className="topology-node-icon srv" style={{ background: "#0284c7" }}>☁️</div>
+                  <div className="topology-node-icon srv" style={{ background: "#0284c7", fontSize: 18 }}>☁️</div>
                   <div className="topology-node-meta">
-                    <strong>{vm.name}</strong>
-                    <small>{vm.privateIp || vm.ip} · {vm.cpu}</small>
+                    <strong style={{ color: "#f8fafc" }}>{vm.name}</strong>
+                    <small style={{ color: "#93c5fd" }}>{vm.privateIp || vm.ip} · {vm.cpu}</small>
                   </div>
                 </div>
               ))}
@@ -357,15 +354,26 @@ export default function ServiceModel({
             </div>
           </div>
 
+          {/* Flow Connector 3 -> 4 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 2px 24px", color: "#f59e0b", fontSize: 11, fontWeight: 600 }}>
+            <span>↓</span>
+            <span style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", padding: "2px 10px", borderRadius: 12 }}>
+              数据持久化存储与核心数据库读写连接
+            </span>
+          </div>
+
           {/* LEVEL 4: DATABASE & STORAGE LAYER */}
           <div>
-            <div className="topology-layer-title">LEVEL 4 · 数据持久化与核心数据库层 (DATABASE & STORAGE)</div>
-            <div className="topology-nodes-row">
+            <div className="topology-layer-title" style={{ color: "#fbbf24", fontWeight: 700 }}>
+              LEVEL 4 · 数据持久化与核心数据库层 (DATABASE & STORAGE)
+            </div>
+            <div className="topology-nodes-row" style={{ flexWrap: "wrap", gap: 10 }}>
               {linkedDbs.length > 0 ? (
                 linkedDbs.map(db => (
                   <div 
                     key={db.id} 
                     className="topology-node-card"
+                    style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1.5px solid rgba(245, 158, 11, 0.45)" }}
                     onClick={() => setInspectedNode({
                       title: db.name,
                       type: `生产数据库 (${db.type})`,
@@ -373,16 +381,17 @@ export default function ServiceModel({
                       extra: `数据容量: ${db.dataSize} · 当前活跃连接数: ${db.connectionCount} · 状态: ${db.status}`
                     })}
                   >
-                    <div className="topology-node-icon db">🗄</div>
+                    <div className="topology-node-icon db" style={{ fontSize: 20 }}>🗄️</div>
                     <div className="topology-node-meta">
-                      <strong>{db.name}</strong>
-                      <small>{db.type} · {db.hostIp}:{db.port}</small>
+                      <strong style={{ color: "#f8fafc" }}>{db.name}</strong>
+                      <small style={{ color: "#fcd34d" }}>{db.type} · {db.hostIp}:{db.port}</small>
                     </div>
                   </div>
                 ))
               ) : (
                 <div 
                   className="topology-node-card"
+                  style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1.5px solid rgba(245, 158, 11, 0.45)" }}
                   onClick={() => setInspectedNode({
                     title: "集群本地高可用存储/共享存储",
                     type: "持久化存储",
@@ -390,24 +399,35 @@ export default function ServiceModel({
                     extra: "容灾多副本备份机制"
                   })}
                 >
-                  <div className="topology-node-icon db">🗄</div>
+                  <div className="topology-node-icon db" style={{ fontSize: 20 }}>💾</div>
                   <div className="topology-node-meta">
-                    <strong>分布式高可用存储卷</strong>
-                    <small>多节点分布式备份集群</small>
+                    <strong style={{ color: "#f8fafc" }}>分布式高可用存储卷</strong>
+                    <small style={{ color: "#fcd34d" }}>多节点分布式数据镜像集群</small>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Flow Connector 4 -> 5 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 2px 24px", color: "#a855f7", fontSize: 11, fontWeight: 600 }}>
+            <span>↓</span>
+            <span style={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.25)", padding: "2px 10px", borderRadius: 12 }}>
+              物理裸金属计算宿主机与数据中心底层算力承载
+            </span>
+          </div>
+
           {/* LEVEL 5: PHYSICAL INFRASTRUCTURE & HYPERVISOR HOSTS */}
           <div>
-            <div className="topology-layer-title">LEVEL 5 · 实体物理计算宿主与硬件层 (PHYSICAL HYPERVISOR & HARDWARE)</div>
-            <div className="topology-nodes-row">
+            <div className="topology-layer-title" style={{ color: "#c084fc", fontWeight: 700 }}>
+              LEVEL 5 · 实体物理计算宿主与硬件层 (PHYSICAL HYPERVISOR & HARDWARE)
+            </div>
+            <div className="topology-nodes-row" style={{ flexWrap: "wrap", gap: 10 }}>
               {linkedHosts.map(h => (
                 <div 
                   key={h.id} 
                   className="topology-node-card"
+                  style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1.5px solid rgba(168, 85, 247, 0.45)" }}
                   onClick={() => setInspectedNode({
                     title: h.hostname,
                     type: "物理服务器 / 计算宿主",
@@ -415,13 +435,39 @@ export default function ServiceModel({
                     extra: `算力规格: ${h.cpu} · 内存: ${h.memory} · 磁盘: ${h.disk}`
                   })}
                 >
-                  <div className="topology-node-icon srv">💻</div>
+                  <div className="topology-node-icon srv" style={{ fontSize: 20, background: "#7c3aed" }}>💻</div>
                   <div className="topology-node-meta">
-                    <strong>{h.hostname}</strong>
-                    <small>{h.ip} · {h.brand} {h.model}</small>
+                    <strong style={{ color: "#f8fafc" }}>{h.hostname}</strong>
+                    <small style={{ color: "#d8b4fe" }}>{h.ip} · {h.brand} {h.model}</small>
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Topology Bottom Status Bar */}
+          <div style={{
+            marginTop: 14,
+            paddingTop: 14,
+            borderTop: "1px dashed rgba(148, 163, 184, 0.2)",
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 10,
+            fontSize: 12,
+            color: "#94a3b8"
+          }}>
+            <div style={{ display: "flex", gap: 10, fontSize: 11 }}>
+              <span style={{ background: "rgba(56,189,248,0.1)", color: "#38bdf8", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(56,189,248,0.2)" }}>
+                云主机: {linkedVms.length} 台
+              </span>
+              <span style={{ background: "rgba(245,158,11,0.1)", color: "#fbbf24", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(245,158,11,0.2)" }}>
+                数据库: {linkedDbs.length} 库
+              </span>
+              <span style={{ background: "rgba(168,85,247,0.1)", color: "#c084fc", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(168,85,247,0.2)" }}>
+                物理机: {linkedHosts.length} 台
+              </span>
             </div>
           </div>
         </div>

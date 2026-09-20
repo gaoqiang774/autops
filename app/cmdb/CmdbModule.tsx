@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   initialProjects,
   initialHosts,
@@ -29,13 +29,32 @@ import CmdbDashboard from "./CmdbDashboard";
 import VulnDetection from "./VulnDetection";
 import { getAssetKey } from "./excelExport";
 import { ImportStrategy } from "./ImportModal";
+import UserManagement from "./UserManagement";
+import { UserAccount, initialUsers } from "./userTypes";
 
 interface CmdbModuleProps {
   page: string;
   onPageChange: (newPage: string) => void;
+  mainSidebarCollapsed?: boolean;
+  currentUser?: UserAccount;
+  users?: UserAccount[];
+  onAddUser?: (user: UserAccount) => void;
+  onUpdateUser?: (user: UserAccount) => void;
+  onDeleteUser?: (userId: string) => void;
+  onSwitchUser?: (user: UserAccount) => void;
 }
 
-export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
+export default function CmdbModule({
+  page,
+  onPageChange,
+  mainSidebarCollapsed = false,
+  currentUser = initialUsers[0],
+  users = initialUsers,
+  onAddUser,
+  onUpdateUser,
+  onDeleteUser,
+  onSwitchUser
+}: CmdbModuleProps) {
   // Centralized State
   const [projects, setProjects] = useState<ProjectGroup[]>(initialProjects);
   const [hosts, setHosts] = useState<PhysicalHost[]>(initialHosts);
@@ -259,9 +278,9 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
               ...old,
               ...incoming,
               id: old.id, // preserve persistent unique ID
-              isImported: true,
+              ...(true ? { isImported: true } as any : {}),
               updated: new Date().toISOString().slice(0, 10)
-            });
+            } as VmHost);
           } else {
             existingMap.set(k, incoming);
           }
@@ -288,17 +307,148 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
     setCredentials(prev => prev.filter(c => c.id !== credId));
   }
 
+  // User Project Permissions Isolation
+  const authorizedProjects = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return projects;
+    }
+    const allowed = new Set(currentUser.authorizedProjects);
+    return projects.filter(p => allowed.has(p.name) || allowed.has(p.id));
+  }, [projects, currentUser]);
+
+  const authorizedProjectNames = useMemo(() => {
+    return new Set(authorizedProjects.map(p => p.name));
+  }, [authorizedProjects]);
+
+  const authorizedProjectIds = useMemo(() => {
+    return new Set(authorizedProjects.map(p => p.id));
+  }, [authorizedProjects]);
+
+  const authorizedHosts = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return hosts;
+    }
+    return hosts.filter(h => 
+      (h.projectName && authorizedProjectNames.has(h.projectName)) ||
+      (h.projectId && authorizedProjectIds.has(h.projectId))
+    );
+  }, [hosts, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedVms = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return vms;
+    }
+    return vms.filter(v => 
+      (v.projectName && authorizedProjectNames.has(v.projectName)) ||
+      (v.projectId && authorizedProjectIds.has(v.projectId))
+    );
+  }, [vms, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedSwitches = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return switches;
+    }
+    return switches.filter(s => 
+      (s.projectName && authorizedProjectNames.has(s.projectName)) ||
+      (s.projectId && authorizedProjectIds.has(s.projectId))
+    );
+  }, [switches, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedDatabases = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return databases;
+    }
+    return databases.filter(d => 
+      authorizedProjectIds.has(d.businessId) ||
+      authorizedProjects.some(p => p.name.includes("仲裁") || p.name.includes("人社"))
+    );
+  }, [databases, currentUser, authorizedProjectIds, authorizedProjects]);
+
+  const authorizedSoftwareList = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return softwareList;
+    }
+    return softwareList.filter(s => 
+      authorizedProjectNames.has(s.projectName) ||
+      authorizedProjectIds.has(s.projectId)
+    );
+  }, [softwareList, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedBusinesses = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return businesses;
+    }
+    return businesses.filter(b => 
+      authorizedProjectNames.has(b.name) ||
+      authorizedProjectIds.has(b.id)
+    );
+  }, [businesses, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
   return (
-    <div style={{ padding: "14px 18px", height: "calc(100vh - 63px)", marginLeft: 200, overflowY: "auto", background: "#f1f5f9" }}>
+    <div style={{
+      padding: "14px 18px",
+      height: "calc(100vh - 70px)",
+      marginLeft: mainSidebarCollapsed ? 56 : 200,
+      transition: "margin-left 0.25s ease",
+      overflowY: "auto",
+      background: "#f1f5f9"
+    }}>
+      {/* Restricted User Perspective Warning Banner */}
+      {currentUser && currentUser.authorizedProjects !== "all" && (
+        <div style={{
+          margin: "0 0 12px 0",
+          background: "#fef3c7",
+          border: "1px solid #fde68a",
+          borderRadius: 8,
+          padding: "8px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: 12,
+          color: "#92400e",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14 }}>🔒</span>
+            <span>
+              <strong>当前处于受限用户【{currentUser.displayName}】视角：</strong>
+              经 <code>admin</code> 统一授权，仅展示已授权的 <strong>{authorizedProjects.length}</strong> 个业务项目及关联计算/软件/数据库资产。
+            </span>
+          </div>
+          {onSwitchUser && (
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{
+                fontSize: 11,
+                padding: "3px 10px",
+                background: "#fff",
+                fontWeight: 600,
+                color: "#1d4ed8",
+                borderColor: "#bfdbfe"
+              }}
+              onClick={() => {
+                const adminUser = users.find(u => u.username === "admin");
+                if (adminUser) {
+                  onSwitchUser(adminUser);
+                }
+              }}
+            >
+              ⚡ 切换回 admin 全局视角
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 1. 项目资产 (核心资产管理主工作台，按项目分资产) */}
       {(page === "项目资产" || page === "主机管理" || page === "机房管理") && (
         <HostManagement 
-          projects={projects}
-          hosts={hosts}
-          vms={vms}
-          switches={switches}
-          databases={databases}
-          softwareList={softwareList}
+          projects={authorizedProjects}
+          hosts={authorizedHosts}
+          vms={authorizedVms}
+          switches={authorizedSwitches}
+          databases={authorizedDatabases}
+          softwareList={authorizedSoftwareList}
           channelList={channelList}
           onAddSoftware={handleAddSoftware}
           onDeleteSoftware={handleDeleteSoftware}
@@ -319,12 +469,12 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
       {/* 2. 资产大盘 (按项目、客户、云厂商、信创全局指标) */}
       {(page === "资产大盘" || page === "仪表盘") && (
         <CmdbDashboard 
-          projects={projects}
-          hosts={hosts}
-          vms={vms}
-          switches={switches}
-          databases={databases}
-          businesses={businesses}
+          projects={authorizedProjects}
+          hosts={authorizedHosts}
+          vms={authorizedVms}
+          switches={authorizedSwitches}
+          databases={authorizedDatabases}
+          businesses={authorizedBusinesses}
           onNavigate={onPageChange}
         />
       )}
@@ -332,11 +482,11 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
       {/* 3. 业务拓扑 (按项目业务全景拓扑) */}
       {(page === "业务拓扑" || page === "业务模型") && (
         <ServiceModel 
-          businesses={businesses}
-          hosts={hosts}
-          vms={vms}
-          databases={databases}
-          switches={switches}
+          businesses={authorizedBusinesses}
+          hosts={authorizedHosts}
+          vms={authorizedVms}
+          databases={authorizedDatabases}
+          switches={authorizedSwitches}
           rooms={[]}
           cabinets={[]}
         />
@@ -345,30 +495,49 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
       {/* 4. 漏洞检测 (基于操作系统家族、版本号与内核快速定位受威胁资产) */}
       {(page === "漏洞检测" || page === "漏洞排查") && (
         <VulnDetection 
-          projects={projects}
-          hosts={hosts}
-          vms={vms}
-          switches={switches}
+          projects={authorizedProjects}
+          hosts={authorizedHosts}
+          vms={authorizedVms}
+          switches={authorizedSwitches}
         />
       )}
 
 
 
-      {/* 7. 凭据管理 */}
+      {/* 5. 凭据管理 */}
       {page === "凭据管理" && (
         <CredentialManagement 
           credentials={credentials}
           onAddCredential={handleAddCredential}
           onDeleteCredential={handleDeleteCredential}
+          projects={authorizedProjects}
+          hosts={authorizedHosts}
+          vms={authorizedVms}
+          softwareList={authorizedSoftwareList}
+          databases={authorizedDatabases}
         />
       )}
 
-      {/* 8. AIops助手 */}
+      {/* 6. 用户管理与项目权限控制 (admin 集中授权) */}
+      {page === "用户管理" && (
+        <UserManagement 
+          currentUser={currentUser}
+          users={users}
+          allProjects={projects}
+          onAddUser={onAddUser || (() => {})}
+          onUpdateUser={onUpdateUser || (() => {})}
+          onDeleteUser={onDeleteUser || (() => {})}
+          onSwitchUser={onSwitchUser || (() => {})}
+          onPageChange={onPageChange}
+        />
+      )}
+
+      {/* 7. AIops助手 */}
       {page === "AIops助手" && (
         <div className="cmdb-container" style={{ background: "#fff", padding: 20, borderRadius: 8, border: "1px solid #e2e8f0" }}>
           <h3 style={{ margin: "0 0 10px", color: "#0f172a" }}>✦ 项目资产智能 AI 助手</h3>
           <p style={{ color: "#64748b", fontSize: 13 }}>
-            针对【运维信息资产管理平台】24 个重点业务项目、292 台信息资产提供知识问答与快速定位：
+            针对【运维信息资产管理平台】{authorizedProjects.length} 个已授权业务项目、{authorizedVms.length + authorizedHosts.length + authorizedSwitches.length} 台信息资产提供知识问答与快速定位：
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 16 }}>
             <div 
@@ -389,7 +558,7 @@ export default function CmdbModule({ page, onPageChange }: CmdbModuleProps) {
               style={{ background: "#faf5ff", border: "1px solid #e9d5ff", padding: 14, borderRadius: 8, cursor: "pointer" }}
               onClick={() => onPageChange("资产大盘")}
             >
-              <b style={{ color: "#7e22ce", display: "block", marginBottom: 6 }}>📊 查看全网 24 个项目算力核数与存储配额大盘</b>
+              <b style={{ color: "#7e22ce", display: "block", marginBottom: 6 }}>📊 查看全网已授权算力核数与存储配额大盘</b>
               <span style={{ fontSize: 12, color: "#475569" }}>查看联通云、首信云、国企云及信创 OS 宏观占比分布 →</span>
             </div>
           </div>

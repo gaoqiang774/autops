@@ -96,8 +96,8 @@ export default function HostManagement({
     setCopiedNotice(label);
     setTimeout(() => setCopiedNotice(null), 2500);
   }
-  // Selected project ID ("all" for all assets)
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || "all");
+  // Selected project ID ("all" for all assets overview by default)
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   
   // Left Sidebar Project Search & Filter
   const [projectSearch, setProjectSearch] = useState("");
@@ -109,6 +109,16 @@ export default function HostManagement({
   const [ipSearchKeyword, setIpSearchKeyword] = useState("");
   const [deviceTypeFilter, setDeviceTypeFilter] = useState("全部");
   const [xinchuangFilter, setXinchuangFilter] = useState("全部");
+  // Advanced multi-condition filter state
+  const [showAdvFilter, setShowAdvFilter] = useState(false);
+  const [filterEnv, setFilterEnv] = useState("全部");
+  const [filterCloud, setFilterCloud] = useState("全部");
+  const [filterRegion, setFilterRegion] = useState("全部");
+  const [filterOsFamily, setFilterOsFamily] = useState("全部");
+
+  // UI collapse states
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
 
   // IP Batch Query Modal States
   const [showIpModal, setShowIpModal] = useState(false);
@@ -200,7 +210,7 @@ export default function HostManagement({
   const [deletingAsset, setDeletingAsset] = useState<UnifiedAsset | null>(null);
 
   function openEditModal(item: UnifiedAsset) {
-    const rawCpu = item.cpu || "";
+    const rawCpu = (item as any).cpu || "";
     let parsedCores = item.cpuCores || 4;
     let parsedArch = item.cpuArch || (rawCpu.includes("ARM") ? "ARM64" : "x86_64");
 
@@ -219,11 +229,11 @@ export default function HostManagement({
       eip: item.eip || "",
       cpuArch: parsedArch,
       cpuCores: parsedCores,
-      memoryGb: item.memoryGb || parseInt(item.memory || "16", 10) || 16,
+      memoryGb: item.memoryGb || parseInt((item as any).memory || "16", 10) || 16,
       systemDiskGb: item.systemDiskGb || 50,
       dataDiskGb: item.dataDiskGb || 100,
       osFamily: item.osFamily || "CentOS",
-      osVersion: item.osVersion || item.os || "CentOS 7.9",
+      osVersion: item.osVersion || (item as any).os || "CentOS 7.9",
       kernelVersion: item.kernelVersion || "",
       isXinchuang: item.isXinchuang || "否",
       remotePort: item.remotePort || 22,
@@ -373,6 +383,11 @@ export default function HostManagement({
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
 
+  // Aggregates for All Projects Overview
+  const totalOverviewCores = useMemo(() => projects.reduce((s, p) => s + p.totalCores, 0), [projects]);
+  const totalOverviewMem = useMemo(() => projects.reduce((s, p) => s + p.totalMemoryGb, 0), [projects]);
+  const totalOverviewXc = useMemo(() => allAssets.filter(a => a.isXinchuang === "是").length, [allAssets]);
+
   // Project-level VPN & Links
   const currentProjectVpn = useMemo(() => {
     if (!currentProject) return null;
@@ -405,24 +420,43 @@ export default function HostManagement({
       // Xinchuang filter
       if (xinchuangFilter !== "全部" && item.isXinchuang !== xinchuangFilter) return false;
 
-      // Keyword search
+      // Keyword search - all 14 fields + multi-keyword filter support
       if (assetKeyword.trim()) {
-        const kw = assetKeyword.toLowerCase();
+        const terms = assetKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const xcStr = item.isXinchuang === "是" ? "国产信创 信创 国产 是" : "常规os 否 非信创";
         const str = [
           item.name,
           (item as any).hostname,
+          item.deviceType,
+          item.projectName,
+          item.customerName,
+          item.env,
+          item.cloudVendor,
+          item.regionName,
           item.privateIp,
+          (item as any).ip,
           item.internalWanIp,
           item.vip,
           item.eip,
-          item.remarks,
+          item.osFamily,
           item.osVersion,
-          item.customerName,
-          item.projectName
+          (item as any).os,
+          item.kernelVersion,
+          item.cpuArch,
+          xcStr,
+          item.remarks,
+          (item as any).category
         ].filter(Boolean).join(" ").toLowerCase();
 
-        if (!str.includes(kw)) return false;
+        const allMatched = terms.every(t => str.includes(t));
+        if (!allMatched) return false;
       }
+
+      // Advanced filters
+      if (filterEnv !== "全部" && item.env !== filterEnv) return false;
+      if (filterCloud !== "全部" && item.cloudVendor !== filterCloud) return false;
+      if (filterRegion !== "全部" && item.regionName !== filterRegion) return false;
+      if (filterOsFamily !== "全部" && item.osFamily !== filterOsFamily) return false;
 
       // IP address search (supports single IP, prefix/subnet, or multi-IPs)
       if (ipSearchKeyword.trim()) {
@@ -445,7 +479,7 @@ export default function HostManagement({
 
       return true;
     });
-  }, [allAssets, selectedProjectId, currentProject, deviceTypeFilter, xinchuangFilter, assetKeyword, ipSearchKeyword]);
+  }, [allAssets, selectedProjectId, currentProject, deviceTypeFilter, xinchuangFilter, assetKeyword, ipSearchKeyword, filterEnv, filterCloud, filterRegion, filterOsFamily]);
 
   // Cross-project IP match detection
   const crossProjectIpMatch = useMemo(() => {
@@ -634,24 +668,70 @@ export default function HostManagement({
     <div className="cmdb-container" style={{ display: "flex", flexDirection: "row", gap: 14, height: "calc(100vh - 90px)", paddingBottom: 0, alignItems: "stretch" }}>
       {/* ================= LEFT SIDEBAR: PROJECTS LIST ================= */}
       <div style={{
-        width: 290,
-        minWidth: 290,
+        width: sidebarCollapsed ? 38 : 290,
+        minWidth: sidebarCollapsed ? 38 : 290,
         background: "#fff",
         border: "1px solid #e2e8f0",
         borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+        boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+        transition: "width 0.25s ease, min-width 0.25s ease",
+        position: "relative"
       }}>
-        {/* Left Header */}
+        {/* Collapsed state: show clean vertical column with top expand button */}
+        {sidebarCollapsed ? (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              paddingTop: 10,
+              gap: 12
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(false)}
+              title="展开项目资产目录"
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 4,
+                border: "1px solid #93c5fd",
+                background: "#eff6ff",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "#1e40af",
+                padding: 0
+              }}
+            >
+              ›
+            </button>
+            <div style={{
+              writingMode: "vertical-rl",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#64748b",
+              letterSpacing: 3,
+              userSelect: "none"
+            }}>项目资产目录</div>
+          </div>
+        ) : (
+          <>
         <div style={{ padding: "12px 14px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 14 }}>
+            <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 14, whiteSpace: "nowrap" }}>
               📁 项目资产目录
             </span>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "#64748b", background: "#e2e8f0", padding: "1px 6px", borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#64748b", background: "#e2e8f0", padding: "1px 6px", borderRadius: 10, whiteSpace: "nowrap" }}>
                 {projects.length} 个
               </span>
               <button
@@ -676,12 +756,36 @@ export default function HostManagement({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 3,
-                  cursor: "pointer"
+                  cursor: "pointer",
+                  whiteSpace: "nowrap"
                 }}
                 title="录入并创建新的业务项目单位"
               >
                 <span>＋</span>
                 <span>录入项目</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                title="收缩项目资产目录"
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 4,
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#475569",
+                  padding: 0,
+                  flexShrink: 0
+                }}
+              >
+                ‹
               </button>
             </div>
           </div>
@@ -807,6 +911,8 @@ export default function HostManagement({
             );
           })}
         </div>
+          </>
+        )}
       </div>
 
       {/* ================= RIGHT WORKBENCH: ASSET TABLE ================= */}
@@ -816,11 +922,81 @@ export default function HostManagement({
           background: "#fff",
           border: "1px solid #e2e8f0",
           borderRadius: 8,
-          padding: "12px 18px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+          padding: headerCollapsed ? "8px 18px" : "12px 18px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          position: "relative"
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-            <div>
+          {/* Collapse toggle for header */}
+          <button
+            type="button"
+            onClick={() => setHeaderCollapsed(!headerCollapsed)}
+            title={headerCollapsed ? "展开项目信息" : "收缩项目信息"}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 10,
+              width: 22, height: 22,
+              borderRadius: 4,
+              border: "1px solid #e2e8f0",
+              background: "#f8fafc",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              color: "#64748b",
+              padding: 0,
+              zIndex: 5
+            }}
+          >
+            {headerCollapsed ? "∨" : "∧"}
+          </button>
+
+          {/* Collapsed: single-line summary */}
+          {headerCollapsed ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 30 }}>
+              <span style={{ background: "#2563eb", color: "#fff", fontSize: 11, padding: "1px 7px", borderRadius: 4, fontWeight: 600, whiteSpace: "nowrap" }}>
+                {currentProject ? currentProject.code : "ALL"}
+              </span>
+              <span style={{ fontWeight: 600, fontSize: 14, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {currentProject ? currentProject.name : "全部项目总览"}
+              </span>
+              <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
+                {currentProject 
+                  ? `${currentProject.customerName} · ${currentProject.env} · ${currentProject.totalCores} Cores · ${currentProject.totalMemoryGb} GB`
+                  : `汇聚 ${projects.length} 个项目 · 全网 ${displayedAssets.length} 台资产 · ${totalOverviewCores} Cores · ${totalOverviewMem} GB`
+                }
+              </span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                {currentProjectVpn && (
+                  <button type="button" onClick={() => setShowProjectVpnModal(true)}
+                    style={{ padding: "3px 10px", background: "linear-gradient(135deg,#bbf7d0,#86efac)", border: "1px solid #4ade80", borderRadius: 6, color: "#14532d", fontWeight: 600, fontSize: 11, cursor: "pointer" }}>
+                    🛡️ VPN
+                  </button>
+                )}
+                <button type="button" onClick={() => setShowImportModal(true)}
+                  style={{ padding: "3px 10px", background: "linear-gradient(135deg,#dbeafe,#bfdbfe)", border: "1px solid #93c5fd", borderRadius: 6, color: "#1e40af", fontWeight: 600, fontSize: 11, cursor: "pointer" }}>
+                  📥 导入
+                </button>
+                <button type="button" onClick={handleExportExcel}
+                  style={{ padding: "3px 10px", background: "linear-gradient(135deg,#f8fafc,#f1f5f9)", border: "1px solid #cbd5e1", borderRadius: 6, color: "#334155", fontWeight: 600, fontSize: 11, cursor: "pointer" }}>
+                  📤 导出
+                </button>
+                <button type="button" onClick={() => { setIpBatchText(ipSearchKeyword || ""); setShowIpModal(true); }}
+                  style={{ padding: "3px 10px", background: "linear-gradient(135deg,#ecfdf5,#d1fae5)", border: "1px solid #6ee7b7", borderRadius: 6, color: "#065f46", fontWeight: 600, fontSize: 11, cursor: "pointer" }}>
+                  🌐 IP查询
+                </button>
+                <button type="button" onClick={() => setShowAddModal(true)}
+                  style={{ padding: "3px 12px", background: "linear-gradient(135deg,#2563eb,#1d4ed8)", border: "none", borderRadius: 6, color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer", boxShadow: "0 1px 4px rgba(37,99,235,0.3)" }}>
+                  ＋ 录入
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+            {/* ── 项目标题行 ─────────────────────────── */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{
                   background: "#2563eb",
@@ -831,12 +1007,12 @@ export default function HostManagement({
                   fontWeight: 600,
                   whiteSpace: "nowrap"
                 }}>
-                  {currentProject ? currentProject.code : "ALL-ASSETS"}
+                  {currentProject ? currentProject.code : "ALL"}
                 </span>
                 <h3 style={{ margin: 0, fontSize: 17, color: "#0f172a", whiteSpace: "nowrap" }}>
-                  {currentProject ? currentProject.name : "跨项目全量资产台账总表"}
+                  {currentProject ? currentProject.name : "全部项目总览"}
                 </h3>
-                {currentProject && (
+                {currentProject ? (
                   <span style={{ 
                     background: currentProject.env === "生产" ? "#dcfce7" : "#f1f5f9",
                     color: currentProject.env === "生产" ? "#15803d" : "#475569",
@@ -847,147 +1023,199 @@ export default function HostManagement({
                   }}>
                     {currentProject.env}环境
                   </span>
+                ) : (
+                  <span style={{ 
+                    background: "#eff6ff",
+                    color: "#2563eb",
+                    fontSize: 11,
+                    padding: "1px 8px",
+                    borderRadius: 4,
+                    fontWeight: 600,
+                    whiteSpace: "nowrap"
+                  }}>
+                    全量跨项目全景
+                  </span>
                 )}
               </div>
               <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
                 {currentProject 
                   ? `客户单位: ${currentProject.customerName} · 承载云厂商: ${currentProject.cloudVendor} (${currentProject.regionName})`
-                  : "汇聚 24 个项目单位 · 覆盖联通云、首信云、国企云、太极云、阿里云等混合云算力资源"
+                  : `汇聚 ${projects.length} 个重点项目 · 覆盖联通云、首信云、国企云、太极云、阿里云等多云算力资源`
                 }
               </p>
             </div>
 
-            {/* Quick Metrics Badges */}
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "6px 12px", borderRadius: 6, textAlign: "center" }}>
-                <span style={{ fontSize: 10, color: "#64748b", display: "block" }}>项目资产</span>
-                <strong style={{ fontSize: 15, color: "#0f172a" }}>
+            {/* 资源统计卡片 */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "6px 14px", borderRadius: 8, textAlign: "center", minWidth: 60 }}>
+                <span style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 2 }}>
+                  {currentProject ? "项目资产" : "纳管总资产"}
+                </span>
+                <strong style={{ fontSize: 16, color: "#0f172a" }}>
                   {displayedAssets.length} <small style={{ fontSize: 10, fontWeight: 400 }}>台</small>
                 </strong>
               </div>
 
-              {currentProject && (
-                <>
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "6px 12px", borderRadius: 6, textAlign: "center" }}>
-                    <span style={{ fontSize: 10, color: "#64748b", display: "block" }}>算力核数</span>
-                    <strong style={{ fontSize: 15, color: "#2563eb" }}>
-                      {currentProject.totalCores} <small style={{ fontSize: 10, fontWeight: 400 }}>Cores</small>
-                    </strong>
-                  </div>
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "6px 12px", borderRadius: 6, textAlign: "center" }}>
-                    <span style={{ fontSize: 10, color: "#64748b", display: "block" }}>内存池</span>
-                    <strong style={{ fontSize: 15, color: "#059669" }}>
-                      {currentProject.totalMemoryGb} <small style={{ fontSize: 10, fontWeight: 400 }}>GB</small>
-                    </strong>
-                  </div>
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "6px 12px", borderRadius: 6, textAlign: "center" }}>
-                    <span style={{ fontSize: 10, color: "#64748b", display: "block" }}>国产信创</span>
-                    <strong style={{ fontSize: 15, color: "#dc2626" }}>
-                      {currentProject.xinchuangCount} <small style={{ fontSize: 10, fontWeight: 400 }}>台</small>
-                    </strong>
-                  </div>
-                </>
-              )}
-
-              {currentProjectVpn && (
-                <button 
-                  type="button"
-                  className="btn-secondary" 
-                  onClick={() => setShowProjectVpnModal(true)} 
-                  style={{ 
-                    padding: "6px 11px", 
-                    background: "#f0fdf4", 
-                    borderColor: "#86efac", 
-                    color: "#166534", 
-                    fontWeight: 600,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5
-                  }}
-                  title="查看当前项目专网 VPN 网关及拨号策略"
-                >
-                  <span>🛡️</span>
-                  <span>项目专网VPN</span>
-                </button>
-              )}
-
-              {/* 📥 导入按钮 */}
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowImportModal(true)}
-                style={{
-                  padding: "6px 12px",
-                  background: "#eff6ff",
-                  borderColor: "#93c5fd",
-                  color: "#1e40af",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  whiteSpace: "nowrap",
-                  flexShrink: 0
-                }}
-                title={currentProject ? `导入 Excel 资产到【${currentProject.name}】` : "批量导入《信息资产台账》Excel 资产"}
-              >
-                <span>📥</span>
-                <span>{currentProject ? "导入台账到当前项目" : "导入台账"}</span>
-              </button>
-
-              {/* 📤 导出按钮 */}
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={handleExportExcel}
-                style={{
-                  padding: "6px 12px",
-                  background: "#f8fafc",
-                  borderColor: "#cbd5e1",
-                  color: "#0f172a",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  whiteSpace: "nowrap",
-                  flexShrink: 0
-                }}
-                title={`按照《信息资产台账-v340.xlsx》02硬件规范导出当前查询的 ${displayedAssets.length} 台资产`}
-              >
-                <span>📤</span>
-                <span>导出Excel (02硬件格式)</span>
-              </button>
-
-              {/* 🔍 IP地址查询按钮 */}
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  setIpBatchText(ipSearchKeyword || "");
-                  setShowIpModal(true);
-                }}
-                style={{
-                  padding: "6px 12px",
-                  background: "#f0fdf4",
-                  borderColor: "#86efac",
-                  color: "#166534",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  whiteSpace: "nowrap",
-                  flexShrink: 0
-                }}
-                title="快速检索单个或批量比对多个 IP 地址并定位所属项目与资产"
-              >
-                <span>🌐</span>
-                <span>IP地址查询</span>
-              </button>
-
-              <button className="btn-primary" onClick={() => setShowAddModal(true)} style={{ padding: "8px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
-                ＋ 录入项目资产
-              </button>
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: "6px 14px", borderRadius: 8, textAlign: "center", minWidth: 60 }}>
+                <span style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 2 }}>算力核数</span>
+                <strong style={{ fontSize: 16, color: "#2563eb" }}>
+                  {currentProject ? currentProject.totalCores : totalOverviewCores} <small style={{ fontSize: 10, fontWeight: 400 }}>Cores</small>
+                </strong>
+              </div>
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "6px 14px", borderRadius: 8, textAlign: "center", minWidth: 60 }}>
+                <span style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 2 }}>内存池</span>
+                <strong style={{ fontSize: 16, color: "#059669" }}>
+                  {currentProject ? currentProject.totalMemoryGb : totalOverviewMem} <small style={{ fontSize: 10, fontWeight: 400 }}>GB</small>
+                </strong>
+              </div>
+              <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", padding: "6px 14px", borderRadius: 8, textAlign: "center", minWidth: 60 }}>
+                <span style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 2 }}>国产信创</span>
+                <strong style={{ fontSize: 16, color: "#c2410c" }}>
+                  {currentProject ? currentProject.xinchuangCount : totalOverviewXc} <small style={{ fontSize: 10, fontWeight: 400 }}>台</small>
+                </strong>
+              </div>
             </div>
           </div>
+
+          {/* ── 操作按钮行 ───────────────────────────── */}
+          <div style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: "1px solid #f1f5f9",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap"
+          }}>
+            {/* VPN 按钮（仅有 VPN 时显示） */}
+            {currentProjectVpn && (
+              <button 
+                type="button"
+                onClick={() => setShowProjectVpnModal(true)} 
+                style={{ 
+                  padding: "7px 14px", 
+                  background: "linear-gradient(135deg,#bbf7d0,#86efac)",
+                  border: "1px solid #4ade80",
+                  borderRadius: 8,
+                  color: "#14532d", 
+                  fontWeight: 600,
+                  fontSize: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 3px rgba(74,222,128,0.2)"
+                }}
+                title="查看当前项目专网 VPN 网关及拨号策略"
+              >
+                🛡️ 项目专网 VPN
+              </button>
+            )}
+
+            {/* 分隔线 */}
+            {currentProjectVpn && <div style={{ width: 1, height: 24, background: "#e2e8f0", flexShrink: 0 }} />}
+
+            {/* 📥 导入 */}
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              style={{
+                padding: "7px 14px",
+                background: "linear-gradient(135deg,#dbeafe,#bfdbfe)",
+                border: "1px solid #93c5fd",
+                borderRadius: 8,
+                color: "#1e40af",
+                fontWeight: 600,
+                fontSize: 12,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(147,197,253,0.2)"
+              }}
+              title={currentProject ? `导入 Excel 资产到【${currentProject.name}】` : "批量导入《信息资产台账》Excel 资产"}
+            >
+              📥 {currentProject ? "导入台账到当前项目" : "导入台账"}
+            </button>
+
+            {/* 📤 导出 */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              style={{
+                padding: "7px 14px",
+                background: "linear-gradient(135deg,#f8fafc,#f1f5f9)",
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                color: "#334155",
+                fontWeight: 600,
+                fontSize: 12,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+              }}
+              title={`按照《信息资产台账-v340.xlsx》02硬件规范导出当前查询的 ${displayedAssets.length} 台资产`}
+            >
+              📤 导出 Excel (02硬件格式)
+            </button>
+
+            {/* 🌐 IP查询 */}
+            <button
+              type="button"
+              onClick={() => {
+                setIpBatchText(ipSearchKeyword || "");
+                setShowIpModal(true);
+              }}
+              style={{
+                padding: "7px 14px",
+                background: "linear-gradient(135deg,#ecfdf5,#d1fae5)",
+                border: "1px solid #6ee7b7",
+                borderRadius: 8,
+                color: "#065f46",
+                fontWeight: 600,
+                fontSize: 12,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(110,231,183,0.2)"
+              }}
+              title="快速检索单个或批量比对多个 IP 地址并定位所属项目与资产"
+            >
+              🌐 IP 地址查询
+            </button>
+
+            {/* ＋ 录入资产 - 主操作 */}
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              style={{
+                marginLeft: "auto",
+                padding: "7px 18px",
+                background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                border: "none",
+                borderRadius: 8,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                boxShadow: "0 2px 8px rgba(37,99,235,0.35)"
+              }}
+            >
+              ＋ 录入项目资产
+            </button>
+          </div>
+            </>
+          )}
         </div>
 
         {/* Duplicate Warning & One-Click Cleanup Banner */}
@@ -1045,23 +1273,22 @@ export default function HostManagement({
           borderRadius: 8,
           padding: "8px 14px",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 8
+          flexDirection: "column",
+          gap: 6
         }}>
+          {/* Row 1: main search + quick filters */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input 
-              placeholder="搜索设备名称 / 备注..." 
+            <input
+              placeholder="🔍 搜索任意字段：设备名/项目/客户/IP/系统/信创..."
               value={assetKeyword}
               onChange={e => { setAssetKeyword(e.target.value); setCurrentPage(1); }}
-              style={{ width: 170, fontSize: 12 }}
+              style={{ flex: "1 1 220px", fontSize: 12, padding: "5px 10px", borderRadius: 6, border: "1.5px solid #93c5fd", outline: "none" }}
             />
 
-            {/* IP 地址独立检索框与查询按钮 */}
+            {/* IP search */}
             <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <input 
-                placeholder="输入IP地址 (业务IP/内大网/VIP/网段)..." 
+              <input
+                placeholder="IP地址 (业务/内大网/VIP)..."
                 value={ipSearchInput}
                 onChange={e => setIpSearchInput(e.target.value)}
                 onKeyDown={e => {
@@ -1070,50 +1297,32 @@ export default function HostManagement({
                     setCurrentPage(1);
                   }
                 }}
-                style={{ width: 210, fontSize: 12, padding: "4px 8px" }}
+                style={{ width: 190, fontSize: 12, padding: "5px 8px" }}
               />
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => {
-                  setIpSearchKeyword(ipSearchInput.trim());
-                  setCurrentPage(1);
-                }}
-                style={{
-                  fontSize: 11,
-                  padding: "4px 9px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap"
-                }}
+                onClick={() => { setIpSearchKeyword(ipSearchInput.trim()); setCurrentPage(1); }}
+                style={{ fontSize: 11, padding: "5px 9px", display: "inline-flex", alignItems: "center", gap: 3, cursor: "pointer", whiteSpace: "nowrap" }}
                 title="按输入的目标 IP 地址进行精准查询与过滤"
               >
-                <span>🔍</span>
-                <span>查询IP</span>
+                <span>🔍</span><span>查IP</span>
               </button>
               {ipSearchKeyword && (
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => {
-                    setIpSearchInput("");
-                    setIpSearchKeyword("");
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => { setIpSearchInput(""); setIpSearchKeyword(""); setCurrentPage(1); }}
                   style={{ fontSize: 11, padding: "4px 6px", color: "#64748b" }}
                   title="清除当前 IP 查询"
-                >
-                  ✕
-                </button>
+                >✕</button>
               )}
             </div>
 
-            <select 
-              value={deviceTypeFilter} 
+            <select
+              value={deviceTypeFilter}
               onChange={e => { setDeviceTypeFilter(e.target.value); setCurrentPage(1); }}
-              style={{ fontSize: 12, padding: "4px 8px" }}
+              style={{ fontSize: 12, padding: "5px 8px" }}
             >
               <option value="全部">全部设备形态</option>
               <option value="虚拟机">云主机 / 虚拟机</option>
@@ -1122,35 +1331,87 @@ export default function HostManagement({
               <option value="负载均衡">负载均衡 / SLB</option>
             </select>
 
-            <select 
-              value={xinchuangFilter} 
+            <select
+              value={xinchuangFilter}
               onChange={e => { setXinchuangFilter(e.target.value); setCurrentPage(1); }}
-              style={{ fontSize: 12, padding: "4px 8px" }}
+              style={{ fontSize: 12, padding: "5px 8px" }}
             >
               <option value="全部">全部操作系统</option>
               <option value="是">国产信创 OS (🛡️麒麟/统信)</option>
               <option value="否">常规 OS (CentOS/RedHat)</option>
             </select>
 
-            {(assetKeyword || ipSearchKeyword || deviceTypeFilter !== "全部" || xinchuangFilter !== "全部") && (
-              <button 
+            {/* Advanced filter toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvFilter(!showAdvFilter)}
+              style={{
+                fontSize: 11, padding: "5px 9px",
+                background: showAdvFilter ? "#eff6ff" : "#f8fafc",
+                border: showAdvFilter ? "1.5px solid #93c5fd" : "1px solid #e2e8f0",
+                borderRadius: 6, color: showAdvFilter ? "#1e40af" : "#64748b",
+                fontWeight: 600, cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 4,
+                whiteSpace: "nowrap"
+              }}
+              title="展开多条件高级筛选"
+            >
+              ⚙ 高级筛选 {(filterEnv !== "全部" || filterCloud !== "全部" || filterRegion !== "全部" || filterOsFamily !== "全部") && <span style={{ background: "#2563eb", color: "#fff", borderRadius: 8, fontSize: 10, padding: "0 4px" }}>●</span>}
+            </button>
+
+            {(assetKeyword || ipSearchKeyword || deviceTypeFilter !== "全部" || xinchuangFilter !== "全部" || filterEnv !== "全部" || filterCloud !== "全部" || filterRegion !== "全部" || filterOsFamily !== "全部") && (
+              <button
                 className="btn-secondary"
                 style={{ fontSize: 11, padding: "3px 8px" }}
                 onClick={() => {
-                  setAssetKeyword("");
-                  setIpSearchInput("");
-                  setIpSearchKeyword("");
-                  setDeviceTypeFilter("全部");
-                  setXinchuangFilter("全部");
+                  setAssetKeyword(""); setIpSearchInput(""); setIpSearchKeyword("");
+                  setDeviceTypeFilter("全部"); setXinchuangFilter("全部");
+                  setFilterEnv("全部"); setFilterCloud("全部"); setFilterRegion("全部"); setFilterOsFamily("全部");
                   setCurrentPage(1);
                 }}
               >
-                ✕ 重置筛选
+                ✕ 重置全部筛选
               </button>
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {/* Row 2: advanced filter panel */}
+          {showAdvFilter && (
+            <div style={{
+              display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+              paddingTop: 6, borderTop: "1px dashed #e2e8f0"
+            }}>
+              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, whiteSpace: "nowrap" }}>多条件筛选：</span>
+              <select value={filterEnv} onChange={e => { setFilterEnv(e.target.value); setCurrentPage(1); }} style={{ fontSize: 11, padding: "3px 7px" }}>
+                <option value="全部">全部环境</option>
+                <option value="生产">生产环境</option>
+                <option value="测试">测试环境</option>
+                <option value="开发">开发环境</option>
+              </select>
+              <select value={filterCloud} onChange={e => { setFilterCloud(e.target.value); setCurrentPage(1); }} style={{ fontSize: 11, padding: "3px 7px" }}>
+                <option value="全部">全部云商</option>
+                {Array.from(new Set(allAssets.map(a => a.cloudVendor).filter(Boolean))).map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <select value={filterRegion} onChange={e => { setFilterRegion(e.target.value); setCurrentPage(1); }} style={{ fontSize: 11, padding: "3px 7px" }}>
+                <option value="全部">全部区域</option>
+                {Array.from(new Set(allAssets.map(a => a.regionName).filter(Boolean))).map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <select value={filterOsFamily} onChange={e => { setFilterOsFamily(e.target.value); setCurrentPage(1); }} style={{ fontSize: 11, padding: "3px 7px" }}>
+                <option value="全部">全部OS系列</option>
+                {Array.from(new Set(allAssets.map(a => a.osFamily).filter(Boolean))).map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: "#94a3b8" }}>· 以上条件可叠加组合</span>
+            </div>
+          )}
+
+          {/* Row 3: result count + export */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, color: "#64748b" }}>
               共 <strong style={{ color: "#0f172a" }}>{displayedAssets.length}</strong> 台资产记录
             </span>
@@ -1158,17 +1419,7 @@ export default function HostManagement({
               type="button"
               className="btn-secondary"
               onClick={handleExportExcel}
-              style={{
-                fontSize: 11,
-                padding: "3px 8px",
-                background: "#f0fdf4",
-                borderColor: "#bbf7d0",
-                color: "#15803d",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4
-              }}
+              style={{ fontSize: 11, padding: "3px 8px", background: "#f0fdf4", borderColor: "#bbf7d0", color: "#15803d", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}
               title={`导出当前筛选出的 ${displayedAssets.length} 台设备为《02-硬件设备》Excel`}
             >
               <span>📤</span>
@@ -1428,7 +1679,7 @@ export default function HostManagement({
                               </span>
                             )}
                             <span style={{ fontWeight: 500, color: "#334155" }}>
-                              {item.osFamily || item.os || "Linux"}
+                              {item.osFamily || (item as any).os || "Linux"}
                             </span>
                           </div>
                           <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
@@ -3049,7 +3300,7 @@ export default function HostManagement({
                       style={{ fontSize: 11, padding: "3px 8px" }}
                       onClick={() => {
                         const summary = batchIpAnalysis.matchedAssets.map(a => 
-                          `${a.name}\t${a.privateIp || a.ip}\t${a.projectName}\t${a.customerName}\t${a.osVersion || a.os}`
+                          `${a.name}\t${a.privateIp || (a as any).ip}\t${a.projectName}\t${a.customerName}\t${a.osVersion || (a as any).os}`
                         ).join("\n");
                         navigator.clipboard?.writeText?.(summary);
                         setToastNotice("✓ 已复制匹配资产列表到剪贴板！");
@@ -3134,7 +3385,7 @@ export default function HostManagement({
                             <div>{asset.projectName}</div>
                             <small style={{ color: "#94a3b8" }}>{asset.customerName}</small>
                           </td>
-                          <td>{asset.osVersion || asset.os || "-"}</td>
+                          <td>{asset.osVersion || (asset as any).os || "-"}</td>
                           <td style={{ textAlign: "center" }}>
                             <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                               <button

@@ -100,6 +100,8 @@ export default function VulnDetection({
   const [envFilter, setEnvFilter] = useState("全部");
   const [exposureFilter, setExposureFilter] = useState("全部");
   const [activeCveId, setActiveCveId] = useState<string | null>(null);
+  // Collapsible search options for enlarging visible area
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
 
   // Vuln IP Batch Modal State
   const [showVulnIpModal, setShowVulnIpModal] = useState(false);
@@ -470,10 +472,96 @@ export default function VulnDetection({
                 {stats.xinchuangCount} <small style={{ fontSize: 11, fontWeight: 400 }}>台</small>
               </strong>
             </div>
+
+            {/* 折叠/展开筛选选项按钮 */}
+            <button
+              type="button"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                background: filtersCollapsed ? "#eff6ff" : "#f8fafc",
+                border: filtersCollapsed ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                borderRadius: 6,
+                color: filtersCollapsed ? "#1d4ed8" : "#475569",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                transition: "all 0.15s"
+              }}
+              title={filtersCollapsed ? "展开排查选项以调整筛选" : "收起排查选项以增大下方表格的可视范围"}
+            >
+              <span>{filtersCollapsed ? "⚡ 展开排查选项" : "▲ 收起排查选项"}</span>
+              <span style={{ fontSize: 10 }}>{filtersCollapsed ? "▼" : "▲"}</span>
+            </button>
           </div>
         </div>
 
-        {/* ================= 2. CORE SEARCH INPUTS ================= */}
+        {/* ================= 2. CORE SEARCH INPUTS (COLLAPSIBLE) ================= */}
+        {filtersCollapsed ? (
+          <div style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            padding: "10px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 10,
+            fontSize: 12
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ color: "#64748b", fontWeight: 600 }}>当前生效条件:</span>
+              <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "2px 8px", borderRadius: 4, fontWeight: 600, border: "1px solid #bfdbfe" }}>
+                系统: {osFamilyInput || "全部系统"}
+              </span>
+              <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "2px 8px", borderRadius: 4, fontWeight: 600, border: "1px solid #bfdbfe" }}>
+                版本: {osVersionInput || "全部版本"}
+              </span>
+              {kernelInput && (
+                <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "2px 8px", borderRadius: 4, fontWeight: 600, border: "1px solid #bfdbfe" }}>
+                  内核: {kernelInput}
+                </span>
+              )}
+              {ipSearchKeyword && (
+                <span style={{ background: "#ecfdf5", color: "#065f46", padding: "2px 8px", borderRadius: 4, fontWeight: 600, border: "1px solid #a7f3d0" }}>
+                  IP: {ipSearchKeyword}
+                </span>
+              )}
+              {projectFilter !== "全部" && (
+                <span style={{ background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: 4, fontWeight: 600, border: "1px solid #fde68a" }}>
+                  项目: {projectFilter}
+                </span>
+              )}
+              <span style={{ color: "#64748b", marginLeft: 4 }}>
+                匹配命中: <strong style={{ color: "#dc2626" }}>{matchedAssets.length}</strong> 台资产
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button 
+                type="button"
+                className="btn-secondary" 
+                style={{ fontSize: 11, padding: "3px 10px" }}
+                onClick={handleReset}
+              >
+                ✕ 重置条件
+              </button>
+              <button 
+                type="button"
+                className="btn-primary" 
+                style={{ fontSize: 11, padding: "3px 12px" }}
+                onClick={() => setFiltersCollapsed(false)}
+              >
+                展开选项 ∨
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         <div style={{
           background: "#f8fafc",
           border: "1px solid #e2e8f0",
@@ -745,6 +833,8 @@ export default function VulnDetection({
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* ================= 4. RESULTS TOOLBAR & EXPORT ================= */}

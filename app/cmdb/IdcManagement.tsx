@@ -157,16 +157,16 @@ export default function IdcManagement({
     }
     // Check hosts in cabinet
     for (const h of hosts.filter(x => x.cabinetId === cabinetId)) {
-      const hEnd = h.startU + h.uHeight - 1;
-      if (!(endU < h.startU || startU > hEnd)) {
-        return `U位 ${startU}U - ${endU}U 与在架服务器 [${h.hostname}] (${h.startU}U-${hEnd}U) 冲突！`;
+      const hEnd = (h.startU ?? 0) + (h.uHeight ?? 1) - 1;
+      if (!(endU < (h.startU ?? 999) || startU > hEnd)) {
+        return `U位 ${startU}U - ${endU}U 与在架服务器 [${h.hostname}] (${h.startU ?? '?'}U-${hEnd}U) 冲突！`;
       }
     }
     // Check switches in cabinet
     for (const s of switches.filter(x => x.cabinetId === cabinetId)) {
-      const sEnd = s.startU + s.uHeight - 1;
-      if (!(endU < s.startU || startU > sEnd)) {
-        return `U位 ${startU}U - ${endU}U 与交换机 [${s.name}] (${s.startU}U-${sEnd}U) 冲突！`;
+      const sEnd = (s.startU ?? 0) + (s.uHeight ?? 1) - 1;
+      if (!(endU < (s.startU ?? 999) || startU > sEnd)) {
+        return `U位 ${startU}U - ${endU}U 与交换机 [${s.name}] (${s.startU ?? '?'}U-${sEnd}U) 冲突！`;
       }
     }
     return null;
@@ -204,6 +204,7 @@ export default function IdcManagement({
       id: `host-${Date.now()}`,
       assetNo: mountForm.assetNo || `SRV-${Date.now().toString().slice(-4)}`,
       hostname: mountForm.hostname || "new-srv-node",
+      name: mountForm.hostname || `new-srv-node-${Date.now().toString().slice(-4)}`,
       roomId: mountForm.roomId,
       cabinetId: mountForm.cabinetId,
       startU: Number(mountForm.startU),
@@ -530,16 +531,16 @@ export default function IdcManagement({
                     {/* Render 42 slots from 42 down to 1 */}
                     {Array.from({ length: 42 }, (_, i) => 42 - i).map(slotNum => {
                       // Check if a host starts or occupies this slot
-                      const mountedHost = cabinetHosts.find(h => slotNum >= h.startU && slotNum < h.startU + h.uHeight);
-                      const mountedSwitch = cabinetSwitches.find(s => slotNum >= s.startU && slotNum < s.startU + s.uHeight);
+                      const mountedHost = cabinetHosts.find(h => slotNum >= (h.startU ?? 0) && slotNum < (h.startU ?? 0) + (h.uHeight ?? 1));
+                      const mountedSwitch = cabinetSwitches.find(s => slotNum >= (s.startU ?? 0) && slotNum < (s.startU ?? 0) + (s.uHeight ?? 1));
 
                       // If a multi-U device starts at a different slot and covers this slot, only render on the top-most slot or render spanning
                       if (mountedHost) {
                         // Top slot of this device
-                        const isDeviceTop = slotNum === (mountedHost.startU + mountedHost.uHeight - 1);
+                        const isDeviceTop = slotNum === ((mountedHost.startU ?? 0) + (mountedHost.uHeight ?? 1) - 1);
                         if (!isDeviceTop) return null; // skipped because parent block spans
 
-                        const heightPx = mountedHost.uHeight * 30 - 2;
+                        const heightPx = (mountedHost.uHeight ?? 1) * 30 - 2;
                         const isSelected = selectedHostId === mountedHost.id;
 
                         let brandClass = "device-dell";
@@ -548,7 +549,7 @@ export default function IdcManagement({
 
                         return (
                           <div key={slotNum} className="rack-u-row" style={{ height: heightPx }}>
-                            <div className="u-num-tag">{mountedHost.startU + mountedHost.uHeight - 1}U</div>
+                            <div className="u-num-tag">{(mountedHost.startU ?? 0) + (mountedHost.uHeight ?? 1) - 1}U</div>
                             <div 
                               className={`slot-occupied ${brandClass} ${isSelected ? "selected" : ""}`}
                               style={{ height: "100%" }}
@@ -575,13 +576,13 @@ export default function IdcManagement({
                       }
 
                       if (mountedSwitch) {
-                        const isSwitchTop = slotNum === (mountedSwitch.startU + mountedSwitch.uHeight - 1);
+                        const isSwitchTop = slotNum === ((mountedSwitch.startU ?? 0) + (mountedSwitch.uHeight ?? 1) - 1);
                         if (!isSwitchTop) return null;
-                        const heightPx = mountedSwitch.uHeight * 30 - 2;
+                        const heightPx = (mountedSwitch.uHeight ?? 1) * 30 - 2;
 
                         return (
                           <div key={slotNum} className="rack-u-row" style={{ height: heightPx }}>
-                            <div className="u-num-tag">{mountedSwitch.startU}U</div>
+                            <div className="u-num-tag">{mountedSwitch.startU ?? slotNum}U</div>
                             <div className="slot-occupied device-switch" style={{ height: "100%" }}>
                               <div className="device-info-left">
                                 <span className="device-brand-badge">{mountedSwitch.brand}</span>
@@ -677,7 +678,7 @@ export default function IdcManagement({
                       >
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "#1e293b" }}>{h.hostname}</div>
-                          <div style={{ fontSize: 11, color: "#64748b" }}>{h.startU}U-{h.startU + h.uHeight - 1}U · {h.brand} {h.model} · IP: {h.ip}</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>{h.startU ?? '?'}U-{(h.startU ?? 0) + (h.uHeight ?? 1) - 1}U · {h.brand} {h.model} · IP: {h.ip}</div>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button 
@@ -875,7 +876,7 @@ export default function IdcManagement({
                           <td style={{ fontFamily: "monospace", color: "#2563eb" }}>{h.ip}</td>
                           <td style={{ fontFamily: "monospace", color: "#64748b" }}>{h.bmcIp}</td>
                           <td>{room?.city} · {cab?.name}</td>
-                          <td><span className="room-badge">{h.startU}U - {h.startU + h.uHeight - 1}U ({h.uHeight}U)</span></td>
+                          <td><span className="room-badge">{h.startU ?? '?'}U - {(h.startU ?? 0) + (h.uHeight ?? 1) - 1}U ({h.uHeight ?? '?'}U)</span></td>
                           <td>{h.brand} {h.model}</td>
                           <td style={{ fontSize: 11, color: "#64748b" }}>{h.cpu} · {h.memory}</td>
                           <td>
