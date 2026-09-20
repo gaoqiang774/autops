@@ -7,7 +7,7 @@
  * 3. 增加主菜单内容：修改第一位 (X) -> 如 1.1.0 -> 2.0.0
  */
 
-export const APP_VERSION = "1.9.1";
+export const APP_VERSION = "1.9.2";
 
 export interface VersionRecord {
   version: string;
@@ -18,6 +18,13 @@ export interface VersionRecord {
 }
 
 export const VERSION_HISTORY: VersionRecord[] = [
+  {
+    version: "1.9.2",
+    date: "2026-09-20",
+    type: "bugfix",
+    title: "清理系统旧数据并全量重新导入《信息资产台账-v342.xlsx》硬件数据",
+    description: "1. 全面清理重置平台历史台账数据；2. 基于最新版本《信息资产台账-v342.xlsx》「02-硬件设备」工作表完成 292 台资产设备全量重新导入；3. 重新校准 23 个业务项目的物理机、虚拟机、负载均衡及信创资产统计指标、机房机柜拓扑分布与关联软件服务。"
+  },
   {
     version: "1.9.1",
     date: "2026-09-20",
