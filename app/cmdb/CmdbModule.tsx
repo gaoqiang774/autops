@@ -7,6 +7,9 @@ import {
   initialSwitches,
   initialBusinesses,
   initialDatabases,
+  initialMiddlewares,
+  initialBackups,
+  initialOpsRecords,
   initialCredentials,
   initialSoftwareComponents,
   initialOpsChannels,
@@ -15,6 +18,9 @@ import {
   VmHost,
   SwitchDevice,
   DatabaseAsset,
+  MiddlewareAsset,
+  BackupAsset,
+  OpsAsset,
   BusinessModel,
   CredentialItem,
   SoftwareComponent,
@@ -27,7 +33,7 @@ import ServiceModel from "./ServiceModel";
 import CredentialManagement from "./CredentialManagement";
 import CmdbDashboard from "./CmdbDashboard";
 import VulnDetection from "./VulnDetection";
-import { getAssetKey } from "./excelExport";
+import { getAssetKey, getDatabaseKey, getMiddlewareKey, getBackupKey, getOpsKey } from "./excelExport";
 import { ImportStrategy } from "./ImportModal";
 import UserManagement from "./UserManagement";
 import { UserAccount, initialUsers } from "./userTypes";
@@ -60,11 +66,46 @@ export default function CmdbModule({
   const [hosts, setHosts] = useState<PhysicalHost[]>(initialHosts);
   const [vms, setVms] = useState<VmHost[]>(initialVms);
   const [switches, setSwitches] = useState<SwitchDevice[]>(initialSwitches);
-  const [databases] = useState<DatabaseAsset[]>(initialDatabases);
+  const [databases, setDatabases] = useState<DatabaseAsset[]>(initialDatabases);
+  const [middlewares, setMiddlewares] = useState<MiddlewareAsset[]>(initialMiddlewares);
+  const [backups, setBackups] = useState<BackupAsset[]>(initialBackups);
+  const [opsRecords, setOpsRecords] = useState<OpsAsset[]>(initialOpsRecords);
   const [businesses, setBusinesses] = useState<BusinessModel[]>(initialBusinesses);
   const [credentials, setCredentials] = useState(initialCredentials);
   const [softwareList, setSoftwareList] = useState<SoftwareComponent[]>(initialSoftwareComponents);
   const [channelList, setChannelList] = useState<OpsChannel[]>(initialOpsChannels);
+
+  // 5-Dimension Handlers for Databases
+  function handleAddDatabase(newDb: DatabaseAsset) {
+    setDatabases(prev => [newDb, ...prev]);
+  }
+  function handleDeleteDatabase(dbId: string) {
+    setDatabases(prev => prev.filter(d => d.id !== dbId));
+  }
+
+  // 5-Dimension Handlers for Middlewares
+  function handleAddMiddleware(newMw: MiddlewareAsset) {
+    setMiddlewares(prev => [newMw, ...prev]);
+  }
+  function handleDeleteMiddleware(mwId: string) {
+    setMiddlewares(prev => prev.filter(m => m.id !== mwId));
+  }
+
+  // 5-Dimension Handlers for Backups
+  function handleAddBackup(newBk: BackupAsset) {
+    setBackups(prev => [newBk, ...prev]);
+  }
+  function handleDeleteBackup(bkId: string) {
+    setBackups(prev => prev.filter(b => b.id !== bkId));
+  }
+
+  // 5-Dimension Handlers for Ops Records
+  function handleAddOpsRecord(newOps: OpsAsset) {
+    setOpsRecords(prev => [newOps, ...prev]);
+  }
+  function handleDeleteOpsRecord(opsId: string) {
+    setOpsRecords(prev => prev.filter(o => o.id !== opsId));
+  }
 
   // Handlers for Software Components
   function handleAddSoftware(newSoft: SoftwareComponent) {
@@ -296,9 +337,198 @@ export default function CmdbModule({
     }, 0);
   }
 
+  // Batch import for 03-Databases
+  function handleBatchImportDatabases(
+    newDatabases: (DatabaseAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy = "upsert",
+    targetProjectName?: string | null
+  ) {
+    setDatabases(prev => {
+      const existingMap = new Map<string, DatabaseAsset>();
+      for (const item of prev) {
+        existingMap.set(getDatabaseKey(item), item);
+      }
 
+      if (strategy === "replace") {
+        if (targetProjectName && targetProjectName !== "全部项目总览") {
+          const others = Array.from(existingMap.values()).filter(d => d.projectName !== targetProjectName);
+          return [...newDatabases, ...others];
+        }
+        return [...newDatabases];
+      } else if (strategy === "skip") {
+        for (const item of newDatabases) {
+          const k = getDatabaseKey(item);
+          if (!existingMap.has(k)) {
+            existingMap.set(k, item);
+          }
+        }
+        return Array.from(existingMap.values());
+      } else {
+        for (const incoming of newDatabases) {
+          const k = getDatabaseKey(incoming);
+          if (existingMap.has(k)) {
+            const old = existingMap.get(k)!;
+            existingMap.set(k, { ...old, ...incoming, id: old.id });
+          } else {
+            existingMap.set(k, incoming);
+          }
+        }
+        return Array.from(existingMap.values());
+      }
+    });
+  }
 
-  // Handlers for Credential
+  // Batch import for 04-Middlewares
+  function handleBatchImportMiddlewares(
+    newMiddlewares: (MiddlewareAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy = "upsert",
+    targetProjectName?: string | null
+  ) {
+    setMiddlewares(prev => {
+      const existingMap = new Map<string, MiddlewareAsset>();
+      for (const item of prev) {
+        existingMap.set(getMiddlewareKey(item), item);
+      }
+
+      if (strategy === "replace") {
+        if (targetProjectName && targetProjectName !== "全部项目总览") {
+          const others = Array.from(existingMap.values()).filter(m => m.projectName !== targetProjectName);
+          return [...newMiddlewares, ...others];
+        }
+        return [...newMiddlewares];
+      } else if (strategy === "skip") {
+        for (const item of newMiddlewares) {
+          const k = getMiddlewareKey(item);
+          if (!existingMap.has(k)) {
+            existingMap.set(k, item);
+          }
+        }
+        return Array.from(existingMap.values());
+      } else {
+        for (const incoming of newMiddlewares) {
+          const k = getMiddlewareKey(incoming);
+          if (existingMap.has(k)) {
+            const old = existingMap.get(k)!;
+            existingMap.set(k, { ...old, ...incoming, id: old.id });
+          } else {
+            existingMap.set(k, incoming);
+          }
+        }
+        return Array.from(existingMap.values());
+      }
+    });
+  }
+
+  // Batch import for 05-Backups
+  function handleBatchImportBackups(
+    newBackups: (BackupAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy = "upsert",
+    targetProjectName?: string | null
+  ) {
+    setBackups(prev => {
+      const existingMap = new Map<string, BackupAsset>();
+      for (const item of prev) {
+        existingMap.set(getBackupKey(item), item);
+      }
+
+      if (strategy === "replace") {
+        if (targetProjectName && targetProjectName !== "全部项目总览") {
+          const others = Array.from(existingMap.values()).filter(b => b.projectName !== targetProjectName);
+          return [...newBackups, ...others];
+        }
+        return [...newBackups];
+      } else if (strategy === "skip") {
+        for (const item of newBackups) {
+          const k = getBackupKey(item);
+          if (!existingMap.has(k)) {
+            existingMap.set(k, item);
+          }
+        }
+        return Array.from(existingMap.values());
+      } else {
+        for (const incoming of newBackups) {
+          const k = getBackupKey(incoming);
+          if (existingMap.has(k)) {
+            const old = existingMap.get(k)!;
+            existingMap.set(k, { ...old, ...incoming, id: old.id });
+          } else {
+            existingMap.set(k, incoming);
+          }
+        }
+        return Array.from(existingMap.values());
+      }
+    });
+  }
+
+  // Batch import for 06-Ops
+  function handleBatchImportOpsRecords(
+    newOpsRecords: (OpsAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy = "upsert",
+    targetProjectName?: string | null
+  ) {
+    setOpsRecords(prev => {
+      const existingMap = new Map<string, OpsAsset>();
+      for (const item of prev) {
+        existingMap.set(getOpsKey(item), item);
+      }
+
+      if (strategy === "replace") {
+        if (targetProjectName && targetProjectName !== "全部项目总览") {
+          const others = Array.from(existingMap.values()).filter(o => o.projectName !== targetProjectName);
+          return [...newOpsRecords, ...others];
+        }
+        return [...newOpsRecords];
+      } else if (strategy === "skip") {
+        for (const item of newOpsRecords) {
+          const k = getOpsKey(item);
+          if (!existingMap.has(k)) {
+            existingMap.set(k, item);
+          }
+        }
+        return Array.from(existingMap.values());
+      } else {
+        for (const incoming of newOpsRecords) {
+          const k = getOpsKey(incoming);
+          if (existingMap.has(k)) {
+            const old = existingMap.get(k)!;
+            existingMap.set(k, { ...old, ...incoming, id: old.id });
+          } else {
+            existingMap.set(k, incoming);
+          }
+        }
+        return Array.from(existingMap.values());
+      }
+    });
+  }
+
+  // Multi-dimensional batch import router
+  function handleBatchImportMultiDimension(
+    data: {
+      hardware: (VmHost & { isImported?: boolean })[];
+      databases: (DatabaseAsset & { isImported?: boolean })[];
+      middlewares: (MiddlewareAsset & { isImported?: boolean })[];
+      backups: (BackupAsset & { isImported?: boolean })[];
+      opsRecords: (OpsAsset & { isImported?: boolean })[];
+    },
+    strategy: ImportStrategy = "upsert",
+    targetProjectName?: string | null
+  ) {
+    if (data.hardware && data.hardware.length > 0) {
+      handleBatchImportAssets(data.hardware, strategy, targetProjectName);
+    }
+    if (data.databases && data.databases.length > 0) {
+      handleBatchImportDatabases(data.databases, strategy, targetProjectName);
+    }
+    if (data.middlewares && data.middlewares.length > 0) {
+      handleBatchImportMiddlewares(data.middlewares, strategy, targetProjectName);
+    }
+    if (data.backups && data.backups.length > 0) {
+      handleBatchImportBackups(data.backups, strategy, targetProjectName);
+    }
+    if (data.opsRecords && data.opsRecords.length > 0) {
+      handleBatchImportOpsRecords(data.opsRecords, strategy, targetProjectName);
+    }
+  }
   function handleAddCredential(newCred: CredentialItem) {
     setCredentials(prev => [...prev, newCred]);
   }
@@ -359,10 +589,40 @@ export default function CmdbModule({
       return databases;
     }
     return databases.filter(d => 
-      authorizedProjectIds.has(d.businessId) ||
-      authorizedProjects.some(p => p.name.includes("仲裁") || p.name.includes("人社"))
+      (d.projectName && authorizedProjectNames.has(d.projectName)) ||
+      (d.businessId && authorizedProjectIds.has(d.businessId))
     );
-  }, [databases, currentUser, authorizedProjectIds, authorizedProjects]);
+  }, [databases, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedMiddlewares = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return middlewares;
+    }
+    return middlewares.filter(m => 
+      (m.projectName && authorizedProjectNames.has(m.projectName)) ||
+      (m.projectId && authorizedProjectIds.has(m.projectId))
+    );
+  }, [middlewares, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedBackups = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return backups;
+    }
+    return backups.filter(b => 
+      (b.projectName && authorizedProjectNames.has(b.projectName)) ||
+      (b.projectId && authorizedProjectIds.has(b.projectId))
+    );
+  }, [backups, currentUser, authorizedProjectNames, authorizedProjectIds]);
+
+  const authorizedOpsRecords = useMemo(() => {
+    if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
+      return opsRecords;
+    }
+    return opsRecords.filter(o => 
+      (o.projectName && authorizedProjectNames.has(o.projectName)) ||
+      (o.projectId && authorizedProjectIds.has(o.projectId))
+    );
+  }, [opsRecords, currentUser, authorizedProjectNames, authorizedProjectIds]);
 
   const authorizedSoftwareList = useMemo(() => {
     if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
@@ -448,6 +708,9 @@ export default function CmdbModule({
           vms={authorizedVms}
           switches={authorizedSwitches}
           databases={authorizedDatabases}
+          middlewares={authorizedMiddlewares}
+          backups={authorizedBackups}
+          opsRecords={authorizedOpsRecords}
           softwareList={authorizedSoftwareList}
           channelList={channelList}
           onAddSoftware={handleAddSoftware}
@@ -463,6 +726,19 @@ export default function CmdbModule({
           onAddProject={handleAddProject}
           onBatchImportAssets={handleBatchImportAssets}
           onDeduplicateAssets={handleDeduplicateAssets}
+          onAddDatabase={handleAddDatabase}
+          onDeleteDatabase={handleDeleteDatabase}
+          onAddMiddleware={handleAddMiddleware}
+          onDeleteMiddleware={handleDeleteMiddleware}
+          onAddBackup={handleAddBackup}
+          onDeleteBackup={handleDeleteBackup}
+          onAddOpsRecord={handleAddOpsRecord}
+          onDeleteOpsRecord={handleDeleteOpsRecord}
+          onBatchImportDatabases={handleBatchImportDatabases}
+          onBatchImportMiddlewares={handleBatchImportMiddlewares}
+          onBatchImportBackups={handleBatchImportBackups}
+          onBatchImportOpsRecords={handleBatchImportOpsRecords}
+          onBatchImportMultiDimension={handleBatchImportMultiDimension}
         />
       )}
 

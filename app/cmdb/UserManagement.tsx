@@ -546,7 +546,7 @@ export default function UserManagement({
                             </span>
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                            {user.authorizedProjects.slice(0, 3).map((prj) => (
+                            {Array.isArray(user.authorizedProjects) && user.authorizedProjects.slice(0, 3).map((prj: string) => (
                               <span
                                 key={prj}
                                 style={{

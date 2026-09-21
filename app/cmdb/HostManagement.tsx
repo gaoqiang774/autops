@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, ProjectGroup, AssetMeta, SoftwareComponent, OpsChannel } from "../cmdbData";
-import { exportAssetsToExcel, getAssetKey } from "./excelExport";
+import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, MiddlewareAsset, BackupAsset, OpsAsset, ProjectGroup, AssetMeta, SoftwareComponent, OpsChannel } from "../cmdbData";
+import { exportAssetsToExcel, exportDatabasesToExcel, exportMiddlewaresToExcel, exportBackupsToExcel, exportOpsToExcel, exportAllV351Workbook, getAssetKey } from "./excelExport";
 import ImportModal, { ImportStrategy } from "./ImportModal";
 
 interface HostManagementProps {
@@ -10,8 +10,19 @@ interface HostManagementProps {
   vms: VmHost[];
   switches?: SwitchDevice[];
   databases?: DatabaseAsset[];
+  middlewares?: MiddlewareAsset[];
+  backups?: BackupAsset[];
+  opsRecords?: OpsAsset[];
   softwareList?: SoftwareComponent[];
   channelList?: OpsChannel[];
+  onAddDatabase?: (db: DatabaseAsset) => void;
+  onDeleteDatabase?: (id: string) => void;
+  onAddMiddleware?: (mw: MiddlewareAsset) => void;
+  onDeleteMiddleware?: (id: string) => void;
+  onAddBackup?: (bk: BackupAsset) => void;
+  onDeleteBackup?: (id: string) => void;
+  onAddOpsRecord?: (ops: OpsAsset) => void;
+  onDeleteOpsRecord?: (id: string) => void;
   onAddSoftware?: (s: SoftwareComponent) => void;
   onDeleteSoftware?: (id: string) => void;
   onAddChannel?: (c: OpsChannel) => void;
@@ -22,6 +33,37 @@ interface HostManagementProps {
   onDeleteVm: (id: string) => void;
   onBatchImportAssets?: (
     assets: (VmHost & { isImported?: boolean })[],
+    strategy: ImportStrategy,
+    targetProjectName?: string | null
+  ) => void;
+  onBatchImportDatabases?: (
+    databases: (DatabaseAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy,
+    targetProjectName?: string | null
+  ) => void;
+  onBatchImportMiddlewares?: (
+    middlewares: (MiddlewareAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy,
+    targetProjectName?: string | null
+  ) => void;
+  onBatchImportBackups?: (
+    backups: (BackupAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy,
+    targetProjectName?: string | null
+  ) => void;
+  onBatchImportOpsRecords?: (
+    opsRecords: (OpsAsset & { isImported?: boolean })[],
+    strategy: ImportStrategy,
+    targetProjectName?: string | null
+  ) => void;
+  onBatchImportMultiDimension?: (
+    data: {
+      hardware: (VmHost & { isImported?: boolean })[];
+      databases: (DatabaseAsset & { isImported?: boolean })[];
+      middlewares: (MiddlewareAsset & { isImported?: boolean })[];
+      backups: (BackupAsset & { isImported?: boolean })[];
+      opsRecords: (OpsAsset & { isImported?: boolean })[];
+    },
     strategy: ImportStrategy,
     targetProjectName?: string | null
   ) => void;
@@ -41,6 +83,9 @@ export default function HostManagement({
   vms,
   switches = [],
   databases = [],
+  middlewares = [],
+  backups = [],
+  opsRecords = [],
   softwareList = [],
   channelList = [],
   onAddSoftware,
@@ -55,10 +100,32 @@ export default function HostManagement({
   onDeduplicateAssets,
   onUpdateVm,
   onDeleteUnifiedAsset,
-  onAddProject
+  onAddProject,
+  onAddDatabase,
+  onDeleteDatabase,
+  onAddMiddleware,
+  onDeleteMiddleware,
+  onAddBackup,
+  onDeleteBackup,
+  onAddOpsRecord,
+  onDeleteOpsRecord,
+  onBatchImportDatabases,
+  onBatchImportMiddlewares,
+  onBatchImportBackups,
+  onBatchImportOpsRecords,
+  onBatchImportMultiDimension
 }: HostManagementProps) {
   // Tabs & Modal States for Software, Ops Channels, and VPN
-  const [detailTab, setDetailTab] = useState<"spec" | "software" | "ops" | "vpn">("spec");
+  const [detailTab, setDetailTab] = useState<"spec" | "database" | "middleware" | "backup" | "ops">("spec");
+  const [activeDimension, setActiveDimension] = useState<"hardware" | "database" | "middleware" | "backup" | "ops">("hardware");
+  const [showAddDbModal, setShowAddDbModal] = useState(false);
+  const [showAddMwModal, setShowAddMwModal] = useState(false);
+  const [showAddBkModal, setShowAddBkModal] = useState(false);
+  const [showAddOpsModal, setShowAddOpsModal] = useState(false);
+  const [dbPage, setDbPage] = useState(1);
+  const [mwPage, setMwPage] = useState(1);
+  const [bkPage, setBkPage] = useState(1);
+  const [opsPage, setOpsPage] = useState(1);
   const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
   const [showAddSoftForm, setShowAddSoftForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -66,8 +133,29 @@ export default function HostManagement({
 
   function handleExportExcel() {
     const scopeTitle = currentProject ? currentProject.name : "全量项目总览";
-    exportAssetsToExcel(displayedAssets, scopeTitle);
-    setToastNotice(`✓ 已成功导出 ${displayedAssets.length} 台资产到《02-硬件设备》Excel！`);
+    if (activeDimension === "database") {
+      exportDatabasesToExcel(displayedDatabases, scopeTitle);
+      setToastNotice(`✓ 已成功导出 ${displayedDatabases.length} 条《03-数据库》台账！`);
+    } else if (activeDimension === "middleware") {
+      exportMiddlewaresToExcel(displayedMiddlewares, scopeTitle);
+      setToastNotice(`✓ 已成功导出 ${displayedMiddlewares.length} 条《04-中间件》服务！`);
+    } else if (activeDimension === "backup") {
+      exportBackupsToExcel(displayedBackups, scopeTitle);
+      setToastNotice(`✓ 已成功导出 ${displayedBackups.length} 条《05-备份》策略！`);
+    } else if (activeDimension === "ops") {
+      exportOpsToExcel(displayedOpsRecords, scopeTitle);
+      setToastNotice(`✓ 已成功导出 ${displayedOpsRecords.length} 条《06-运维》保障记录！`);
+    } else {
+      exportAssetsToExcel(displayedAssets, scopeTitle);
+      setToastNotice(`✓ 已成功导出 ${displayedAssets.length} 台资产到《02-硬件设备》Excel！`);
+    }
+    setTimeout(() => setToastNotice(null), 3500);
+  }
+
+  function handleExportAllV351() {
+    const scopeTitle = currentProject ? currentProject.name : "全量项目总览";
+    exportAllV351Workbook(displayedAssets, displayedDatabases, displayedMiddlewares, displayedBackups, displayedOpsRecords, scopeTitle);
+    setToastNotice(`✓ 已成功导出《信息资产台账-v351》全套 5 个工作表 Excel！`);
     setTimeout(() => setToastNotice(null), 3500);
   }
   const [newSoftDraft, setNewSoftDraft] = useState({
@@ -145,6 +233,79 @@ export default function HostManagement({
 
 
   // Add Project Modal State
+
+  // 5-Dimension Add Form States
+  const [newDbDraft, setNewDbDraft] = useState({
+    projectName: "",
+    customerName: "",
+    env: "生产",
+    cloudVendor: "联通云",
+    regionName: "政务外网区",
+    privateIp: "",
+    vipEip: "",
+    dbCategory: "关系型 (RDBMS / OLTP)",
+    dbSoftware: "达梦数据库 (DM)",
+    version: "V8.4",
+    port: 5236,
+    instanceSid: "DMSERVER",
+    dbName: "prod_db",
+    deployMode: "单机",
+    clusterName: "",
+    remarks: ""
+  });
+
+  const [newMwDraft, setNewMwDraft] = useState({
+    projectName: "",
+    customerName: "",
+    env: "生产",
+    cloudVendor: "联通云",
+    regionName: "政务外网区",
+    privateIp: "",
+    mwType: "应用服务器/Java Web 容器",
+    mwSoftware: "TongWeb (东方通)",
+    version: "7.0.E",
+    port: "8080",
+    role: "Server",
+    runtime: "JDK11",
+    remarks: ""
+  });
+
+  const [newBkDraft, setNewBkDraft] = useState({
+    projectName: "",
+    customerName: "",
+    env: "生产",
+    cloudVendor: "联通云",
+    regionName: "政务外网区",
+    privateIp: "",
+    backupType: "数据库",
+    backupMethod: "物理备份",
+    backupPolicy: "物理+归档",
+    storageLocation: "政务专区专用NAS / 对象存储桶",
+    retentionDays: 30,
+    remarks: ""
+  });
+
+  const [newOpsDraft, setNewOpsDraft] = useState({
+    projectName: "",
+    customerName: "",
+    env: "生产",
+    cloudVendor: "联通云",
+    regionName: "政务外网区",
+    privateIp: "",
+    opsVendor: "北京北控伟仕软件有限公司",
+    vpnAddress: "114.255.48.18:443",
+    vpnAccount: "vpn_ops_prod",
+    bastionAddress: "https://jumpserver.bj-gov.cn:443",
+    bastionAccount: "jumpserver_admin",
+    serverAccessAddress: "ssh root@192.125.31.x -p 10022",
+    monitoringCoverage: "是" as "是" | "部分" | "否",
+    inspectionCycle: "每日" as "每日" | "每周" | "每月" | "每季",
+    changeWindow: "周五晚",
+    networkZone: "业务网",
+    exposureSurface: "业务内网",
+    remarks: ""
+  });
+
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [newProjectForm, setNewProjectForm] = useState({
     name: "",
@@ -361,9 +522,9 @@ export default function HostManagement({
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
 
-  // Aggregates for All Projects Overview
-  const totalOverviewCores = useMemo(() => projects.reduce((s, p) => s + p.totalCores, 0), [projects]);
-  const totalOverviewMem = useMemo(() => projects.reduce((s, p) => s + p.totalMemoryGb, 0), [projects]);
+  // Aggregates for All Projects Overview directly computed from allAssets (exact 299 records)
+  const totalOverviewCores = useMemo(() => allAssets.reduce((s, a) => s + (a.cpuCores || 0), 0), [allAssets]);
+  const totalOverviewMem = useMemo(() => allAssets.reduce((s, a) => s + (a.memoryGb || 0), 0), [allAssets]);
   const totalOverviewXc = useMemo(() => allAssets.filter(a => a.isXinchuang === "是").length, [allAssets]);
 
   // Project-level VPN & Links
@@ -458,6 +619,127 @@ export default function HostManagement({
       return true;
     });
   }, [allAssets, selectedProjectId, currentProject, deviceTypeFilter, xinchuangFilter, assetKeyword, ipSearchKeyword, filterEnv, filterCloud, filterRegion, filterOsFamily]);
+  // ── 03-数据库 筛选与分页 ──
+  const displayedDatabases = useMemo(() => {
+    return (databases || []).filter(db => {
+      if (selectedProjectId !== "all") {
+        if (currentProject && db.projectName !== currentProject.name && (db as any).projectId !== currentProject.id) {
+          return false;
+        }
+      }
+      if (ipSearchKeyword.trim()) {
+        const targetIp = ipSearchKeyword.trim().toLowerCase();
+        const ips = [db.privateIp, db.hostIp, db.vipEip].filter(Boolean).map(x => String(x).toLowerCase());
+        if (!ips.some(ip => ip.includes(targetIp))) return false;
+      }
+      if (assetKeyword.trim()) {
+        const terms = assetKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const str = [
+          db.name, db.projectName, db.customerName, db.dbSoftware, db.dbCategory,
+          db.type, db.version, db.privateIp, db.hostIp, db.vipEip, db.instanceSid,
+          db.dbName, db.deployMode, db.clusterName, db.remarks, db.cloudVendor, db.env
+        ].filter(Boolean).join(" ").toLowerCase();
+        return terms.every(t => str.includes(t));
+      }
+      return true;
+    }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
+  }, [databases, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+
+  // ── 04-中间件 筛选与分页 ──
+  const displayedMiddlewares = useMemo(() => {
+    return (middlewares || []).filter(mw => {
+      if (selectedProjectId !== "all") {
+        if (currentProject && mw.projectName !== currentProject.name && mw.projectId !== currentProject.id) {
+          return false;
+        }
+      }
+      if (ipSearchKeyword.trim()) {
+        const targetIp = ipSearchKeyword.trim().toLowerCase();
+        const ips = [mw.privateIp, mw.assetIp].filter(Boolean).map(x => String(x).toLowerCase());
+        if (!ips.some(ip => ip.includes(targetIp))) return false;
+      }
+      if (assetKeyword.trim()) {
+        const terms = assetKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const str = [
+          mw.name, mw.mwSoftware, mw.mwType, mw.version, mw.port, mw.role, mw.runtime,
+          mw.projectName, mw.customerName, mw.privateIp, mw.assetName, mw.remarks, mw.cloudVendor, mw.env
+        ].filter(Boolean).join(" ").toLowerCase();
+        return terms.every(t => str.includes(t));
+      }
+      return true;
+    }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
+  }, [middlewares, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+
+  // ── 05-备份 筛选与分页 ──
+  const displayedBackups = useMemo(() => {
+    return (backups || []).filter(bk => {
+      if (selectedProjectId !== "all") {
+        if (currentProject && bk.projectName !== currentProject.name && bk.projectId !== currentProject.id) {
+          return false;
+        }
+      }
+      if (ipSearchKeyword.trim()) {
+        const targetIp = ipSearchKeyword.trim().toLowerCase();
+        if (!bk.privateIp || !bk.privateIp.toLowerCase().includes(targetIp)) return false;
+      }
+      if (assetKeyword.trim()) {
+        const terms = assetKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const str = [
+          bk.projectName, bk.customerName, bk.privateIp, bk.backupType, bk.backupMethod,
+          bk.backupPolicy, bk.storageLocation, bk.remarks, bk.cloudVendor, bk.env
+        ].filter(Boolean).join(" ").toLowerCase();
+        return terms.every(t => str.includes(t));
+      }
+      return true;
+    }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
+  }, [backups, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+
+  // ── 06-运维 筛选与分页 ──
+  const displayedOpsRecords = useMemo(() => {
+    return (opsRecords || []).filter(ops => {
+      if (selectedProjectId !== "all") {
+        if (currentProject && ops.projectName !== currentProject.name && ops.projectId !== currentProject.id) {
+          return false;
+        }
+      }
+      if (ipSearchKeyword.trim()) {
+        const targetIp = ipSearchKeyword.trim().toLowerCase();
+        if (!ops.privateIp || !ops.privateIp.toLowerCase().includes(targetIp)) return false;
+      }
+      if (assetKeyword.trim()) {
+        const terms = assetKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const str = [
+          ops.projectName, ops.customerName, ops.privateIp, ops.opsVendor, ops.vpnAddress,
+          ops.vpnAccount, ops.bastionAddress, ops.serverAccessAddress, ops.monitoringCoverage,
+          ops.inspectionCycle, ops.changeWindow, ops.networkZone, ops.exposureSurface, ops.remarks,
+          ops.cloudVendor, ops.env
+        ].filter(Boolean).join(" ").toLowerCase();
+        return terms.every(t => str.includes(t));
+      }
+      return true;
+    }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
+  }, [opsRecords, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+
+  const paginatedDatabases = useMemo(() => {
+    const start = (dbPage - 1) * pageSize;
+    return displayedDatabases.slice(start, start + pageSize);
+  }, [displayedDatabases, dbPage, pageSize]);
+
+  const paginatedMiddlewares = useMemo(() => {
+    const start = (mwPage - 1) * pageSize;
+    return displayedMiddlewares.slice(start, start + pageSize);
+  }, [displayedMiddlewares, mwPage, pageSize]);
+
+  const paginatedBackups = useMemo(() => {
+    const start = (bkPage - 1) * pageSize;
+    return displayedBackups.slice(start, start + pageSize);
+  }, [displayedBackups, bkPage, pageSize]);
+
+  const paginatedOpsRecords = useMemo(() => {
+    const start = (opsPage - 1) * pageSize;
+    return displayedOpsRecords.slice(start, start + pageSize);
+  }, [displayedOpsRecords, opsPage, pageSize]);
+
 
   // Cross-project IP match detection
   const crossProjectIpMatch = useMemo(() => {
@@ -536,6 +818,63 @@ export default function HostManagement({
     };
   }, [ipBatchText, allAssets]);
 
+  // Linked items for detailAsset across 5 dimensions
+  const detailAssetIp = detailAsset ? (detailAsset.privateIp || (detailAsset as any).ip || "") : "";
+  const detailAssetDbs = useMemo(() => {
+    if (!detailAsset) return [];
+    return (databases || []).filter(d => 
+      (detailAssetIp && (d.privateIp === detailAssetIp || d.hostIp === detailAssetIp)) ||
+      (detailAsset.projectName && d.projectName === detailAsset.projectName)
+    );
+  }, [detailAsset, detailAssetIp, databases]);
+
+  const detailAssetMws = useMemo(() => {
+    if (!detailAsset) return [];
+    return (middlewares || []).filter(m => 
+      (detailAssetIp && (m.privateIp === detailAssetIp || m.assetIp === detailAssetIp)) ||
+      (detailAsset.projectName && m.projectName === detailAsset.projectName)
+    );
+  }, [detailAsset, detailAssetIp, middlewares]);
+
+  const detailAssetBks = useMemo(() => {
+    if (!detailAsset) return [];
+    return (backups || []).filter(b => 
+      (detailAssetIp && b.privateIp === detailAssetIp) ||
+      (detailAsset.projectName && b.projectName === detailAsset.projectName)
+    );
+  }, [detailAsset, detailAssetIp, backups]);
+
+  const detailAssetOps = useMemo(() => {
+    if (!detailAsset) return [];
+    return (opsRecords || []).filter(o => 
+      (detailAssetIp && o.privateIp === detailAssetIp) ||
+      (detailAsset.projectName && o.projectName === detailAsset.projectName)
+    );
+  }, [detailAsset, detailAssetIp, opsRecords]);
+
+  // Multi-dimension pagination helpers
+  const currentDimTotal = activeDimension === "hardware" ? displayedAssets.length
+    : activeDimension === "database" ? displayedDatabases.length
+    : activeDimension === "middleware" ? displayedMiddlewares.length
+    : activeDimension === "backup" ? displayedBackups.length
+    : displayedOpsRecords.length;
+
+  const currentDimPage = activeDimension === "hardware" ? currentPage
+    : activeDimension === "database" ? dbPage
+    : activeDimension === "middleware" ? mwPage
+    : activeDimension === "backup" ? bkPage
+    : opsPage;
+
+  const currentDimTotalPages = Math.ceil(currentDimTotal / pageSize) || 1;
+
+  function setCurrentDimPage(valOrFn: number | ((prev: number) => number)) {
+    if (activeDimension === "hardware") setCurrentPage(valOrFn);
+    else if (activeDimension === "database") setDbPage(valOrFn);
+    else if (activeDimension === "middleware") setMwPage(valOrFn);
+    else if (activeDimension === "backup") setBkPage(valOrFn);
+    else setOpsPage(valOrFn);
+  }
+
   // Pagination slice
   const totalPages = Math.ceil(displayedAssets.length / pageSize) || 1;
   const paginatedAssets = useMemo(() => {
@@ -592,7 +931,7 @@ export default function HostManagement({
     e.preventDefault();
     if (!newForm.name.trim()) return;
 
-    const newSeq = (allAssets[allAssets.length - 1]?.seq || 238) + 1;
+    const newSeq = (allAssets[allAssets.length - 1]?.seq || 299) + 1;
     const targetProj = projects.find(p => p.name === newForm.projectName) || projects[0];
 
     const newVm: VmHost = {
@@ -813,7 +1152,7 @@ export default function HostManagement({
               </span>
             </div>
             <small style={{ color: "#64748b", fontSize: 11, display: "block", marginTop: 2 }}>
-              查看跨项目 238 台信息资产台账全集
+              查看跨项目 {allAssets.length} 台信息资产台账全集
             </small>
           </div>
 
@@ -1117,7 +1456,7 @@ export default function HostManagement({
               📥 {currentProject ? "导入台账到当前项目" : "导入台账"}
             </button>
 
-            {/* 📤 导出 */}
+            {/* 📤 导出当前视图 */}
             <button
               type="button"
               onClick={handleExportExcel}
@@ -1136,9 +1475,33 @@ export default function HostManagement({
                 whiteSpace: "nowrap",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
               }}
-              title={`按照《信息资产台账-v340.xlsx》02硬件规范导出当前查询的 ${displayedAssets.length} 台资产`}
+              title={`导出当前 [${activeDimension === 'hardware' ? '02硬件设备' : activeDimension === 'database' ? '03数据库' : activeDimension === 'middleware' ? '04中间件' : activeDimension === 'backup' ? '05备份' : '06运维'}] 维度的台账 Excel`}
             >
-              📤 导出 Excel (02硬件格式)
+              📤 导出当前视图 ({activeDimension === 'hardware' ? displayedAssets.length : activeDimension === 'database' ? displayedDatabases.length : activeDimension === 'middleware' ? displayedMiddlewares.length : activeDimension === 'backup' ? displayedBackups.length : displayedOpsRecords.length})
+            </button>
+
+            {/* 📑 导出 v351 全套 5 个工作表 */}
+            <button
+              type="button"
+              onClick={handleExportAllV351}
+              style={{
+                padding: "7px 14px",
+                background: "linear-gradient(135deg,#f0fdf4,#dcfce7)",
+                border: "1px solid #86efac",
+                borderRadius: 8,
+                color: "#166534",
+                fontWeight: 700,
+                fontSize: 12,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(34,197,94,0.15)"
+              }}
+              title="一键导出包含 02硬件、03数据库、04中间件、05备份、06运维 全套 5 个工作表的标准 v351 Excel 工作簿"
+            >
+              📑 导出 v351 全套 Excel
             </button>
 
             {/* 🌐 IP查询 */}
@@ -1168,14 +1531,26 @@ export default function HostManagement({
               🌐 IP 地址查询
             </button>
 
-            {/* ＋ 录入资产 - 主操作 */}
+            {/* ＋ 录入资产/数据库/中间件/备份/运维 - 动态操作 */}
             <button
               type="button"
-              onClick={() => setShowAddModal(true)}
+              onClick={() => {
+                if (activeDimension === "database") setShowAddDbModal(true);
+                else if (activeDimension === "middleware") setShowAddMwModal(true);
+                else if (activeDimension === "backup") setShowAddBkModal(true);
+                else if (activeDimension === "ops") setShowAddOpsModal(true);
+                else setShowAddModal(true);
+              }}
               style={{
                 marginLeft: "auto",
                 padding: "7px 18px",
-                background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                background: activeDimension === "database" ? "linear-gradient(135deg,#4f46e5,#4338ca)" : (
+                  activeDimension === "middleware" ? "linear-gradient(135deg,#d97706,#b45309)" : (
+                    activeDimension === "backup" ? "linear-gradient(135deg,#059669,#047857)" : (
+                      activeDimension === "ops" ? "linear-gradient(135deg,#7c3aed,#6d28d9)" : "linear-gradient(135deg,#2563eb,#1d4ed8)"
+                    )
+                  )
+                ),
                 border: "none",
                 borderRadius: 8,
                 color: "#fff",
@@ -1186,16 +1561,154 @@ export default function HostManagement({
                 gap: 6,
                 cursor: "pointer",
                 whiteSpace: "nowrap",
-                boxShadow: "0 2px 8px rgba(37,99,235,0.35)"
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
               }}
             >
-              ＋ 录入项目资产
+              ＋ 录入{activeDimension === "hardware" ? "硬件资产" : activeDimension === "database" ? "数据库台账" : activeDimension === "middleware" ? "中间件服务" : activeDimension === "backup" ? "备份策略" : "运维保障"}
             </button>
           </div>
             </>
           )}
         </div>
 
+
+        {/* ── 5-Dimension Architecture Tabs (Aligned with Excel v351 sheets) ── */}
+        <div style={{
+          display: "flex",
+          gap: 6,
+          background: "#fff",
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          padding: "6px 10px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          flexWrap: "wrap",
+          alignItems: "center"
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginRight: 4, display: "flex", alignItems: "center", gap: 4 }}>
+            <span>📑</span>
+            <span>台账视窗:</span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => { setActiveDimension("hardware"); setCurrentPage(1); }}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: activeDimension === "hardware" ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
+              background: activeDimension === "hardware" ? "#eff6ff" : "#f8fafc",
+              color: activeDimension === "hardware" ? "#1d4ed8" : "#475569",
+              fontWeight: activeDimension === "hardware" ? 700 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.15s"
+            }}
+          >
+            <span>🖥️ 02-硬件设备</span>
+            <span style={{ fontSize: 10, background: activeDimension === "hardware" ? "#2563eb" : "#e2e8f0", color: activeDimension === "hardware" ? "#fff" : "#475569", padding: "1px 5px", borderRadius: 10 }}>
+              {displayedAssets.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveDimension("database"); setDbPage(1); }}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: activeDimension === "database" ? "1.5px solid #4f46e5" : "1px solid #e2e8f0",
+              background: activeDimension === "database" ? "#eef2ff" : "#f8fafc",
+              color: activeDimension === "database" ? "#4338ca" : "#475569",
+              fontWeight: activeDimension === "database" ? 700 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.15s"
+            }}
+          >
+            <span>🗄️ 03-数据库</span>
+            <span style={{ fontSize: 10, background: activeDimension === "database" ? "#4f46e5" : "#e2e8f0", color: activeDimension === "database" ? "#fff" : "#475569", padding: "1px 5px", borderRadius: 10 }}>
+              {displayedDatabases.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveDimension("middleware"); setMwPage(1); }}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: activeDimension === "middleware" ? "1.5px solid #d97706" : "1px solid #e2e8f0",
+              background: activeDimension === "middleware" ? "#fffbeb" : "#f8fafc",
+              color: activeDimension === "middleware" ? "#b45309" : "#475569",
+              fontWeight: activeDimension === "middleware" ? 700 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.15s"
+            }}
+          >
+            <span>⚙️ 04-中间件</span>
+            <span style={{ fontSize: 10, background: activeDimension === "middleware" ? "#d97706" : "#e2e8f0", color: activeDimension === "middleware" ? "#fff" : "#475569", padding: "1px 5px", borderRadius: 10 }}>
+              {displayedMiddlewares.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveDimension("backup"); setBkPage(1); }}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: activeDimension === "backup" ? "1.5px solid #059669" : "1px solid #e2e8f0",
+              background: activeDimension === "backup" ? "#ecfdf5" : "#f8fafc",
+              color: activeDimension === "backup" ? "#047857" : "#475569",
+              fontWeight: activeDimension === "backup" ? 700 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.15s"
+            }}
+          >
+            <span>💾 05-备份</span>
+            <span style={{ fontSize: 10, background: activeDimension === "backup" ? "#059669" : "#e2e8f0", color: activeDimension === "backup" ? "#fff" : "#475569", padding: "1px 5px", borderRadius: 10 }}>
+              {displayedBackups.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveDimension("ops"); setOpsPage(1); }}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: activeDimension === "ops" ? "1.5px solid #7c3aed" : "1px solid #e2e8f0",
+              background: activeDimension === "ops" ? "#f5f3ff" : "#f8fafc",
+              color: activeDimension === "ops" ? "#6d28d9" : "#475569",
+              fontWeight: activeDimension === "ops" ? 700 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.15s"
+            }}
+          >
+            <span>🛡️ 06-运维</span>
+            <span style={{ fontSize: 10, background: activeDimension === "ops" ? "#7c3aed" : "#e2e8f0", color: activeDimension === "ops" ? "#fff" : "#475569", padding: "1px 5px", borderRadius: 10 }}>
+              {displayedOpsRecords.length}
+            </span>
+          </button>
+        </div>
 
         {/* Filter Bar & Controls */}
         <div style={{
@@ -1450,245 +1963,617 @@ export default function HostManagement({
           flexDirection: "column"
         }}>
           <div style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}>
-            <table className="cmdb-data-table" style={{ minWidth: 1200 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 45 }}>序号</th>
-                  <th style={{ width: 220 }}>设备名称 / 形态</th>
-                  <th style={{ width: 170 }}>所属项目 · 客户单位</th>
-                  <th style={{ width: 140 }}>环境 · 云厂商 · 区域</th>
-                  <th style={{ width: 160 }}>私有业务 IP / 内大网</th>
-                  <th style={{ width: 120 }}>VIP / EIP</th>
-                  <th style={{ width: 150 }}>算力规格 (CPU/内存/磁盘)</th>
-                  <th style={{ width: 150 }}>操作系统 / 信创</th>
-                  <th style={{ width: 70 }}>远程端口</th>
-                  <th style={{ width: 160 }}>备注说明</th>
-                  <th style={{ width: 100, textAlign: "center" }}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedAssets.length === 0 ? (
+            {/* ── 02-硬件设备 表格 ── */}
+            {activeDimension === "hardware" && (
+              <table className="cmdb-data-table" style={{ minWidth: 1200 }}>
+                <thead>
                   <tr>
-                    <td colSpan={11} style={{ textAlign: "center", padding: "36px 0", color: "#94a3b8" }}>
-                      当前项目下暂无符合筛选条件的资产记录
-                    </td>
+                    <th style={{ width: 45 }}>序号</th>
+                    <th style={{ width: 220 }}>设备名称 / 形态</th>
+                    <th style={{ width: 170 }}>所属项目 · 客户单位</th>
+                    <th style={{ width: 140 }}>环境 · 云厂商 · 区域</th>
+                    <th style={{ width: 160 }}>私有业务 IP / 内大网</th>
+                    <th style={{ width: 120 }}>VIP / EIP</th>
+                    <th style={{ width: 150 }}>算力规格 (CPU/内存/磁盘)</th>
+                    <th style={{ width: 150 }}>操作系统 / 信创</th>
+                    <th style={{ width: 70 }}>远程端口</th>
+                    <th style={{ width: 160 }}>备注说明</th>
+                    <th style={{ width: 100, textAlign: "center" }}>操作</th>
                   </tr>
-                ) : (
-                  paginatedAssets.map(item => {
-                    const isPhysical = item._kind === "physical" || item.deviceType === "物理机";
+                </thead>
+                <tbody>
+                  {paginatedAssets.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: "center", padding: "36px 0", color: "#94a3b8" }}>
+                        当前项目下暂无符合筛选条件的资产记录
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedAssets.map(item => {
+                      const isPhysical = item._kind === "physical" || item.deviceType === "物理机";
 
-                    return (
-                      <tr key={item.id} style={{ fontSize: 12 }}>
-                        {/* Seq */}
-                        <td style={{ fontFamily: "monospace", color: "#64748b", fontWeight: 600 }}>
-                          {item.seq || "-"}
-                        </td>
-
-                        {/* Device Name & Type */}
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ 
-                              fontSize: 10, 
-                              padding: "1px 5px", 
-                              borderRadius: 3, 
-                              fontWeight: 600,
-                              background: isPhysical ? "#fef3c7" : "#e0f2fe", 
-                              color: isPhysical ? "#b45309" : "#0369a1" 
-                            }}>
-                              {item.deviceType || (isPhysical ? "物理机" : "虚拟机")}
-                            </span>
-                            <strong 
-                              style={{ color: "#1d4ed8", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
-                              title="点击进入该设备的详细信息档案 (规格/软件/通道/VPN)"
-                              onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
-                            >
-                              {item.name}
-                            </strong>
-                          </div>
-                          {isPhysical && (item as any).model && (
-                            <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
-                              {(item as any).brand} {(item as any).model} · 码: {(item as any).assetNo}
-                            </small>
-                          )}
-                          {/* 软件栈微徽章 */}
-                          {(() => {
-                            const ip = item.privateIp || item.ip;
-                            const sList = softwareList.filter(s => s.assetId === item.id || (ip && s.assetIp === ip) || s.assetName === item.name);
-                            if (sList.length === 0) return null;
-                            return (
-                              <div 
-                                style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, cursor: "pointer", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "1px 6px", borderRadius: 4 }}
-                                onClick={(e) => { e.stopPropagation(); setDetailAsset(item); setDetailTab("software"); }}
-                                title="点击查看部署软件与中间件详情"
-                              >
-                                <span style={{ fontSize: 10, color: "#166534", fontWeight: 700 }}>
-                                  🧩 {sList.length}个软件
-                                </span>
-                                <span style={{ fontSize: 10, color: "#15803d" }}>
-                                  ({sList.slice(0, 2).map(s => s.name.split(" ")[0]).join("/")}{sList.length > 2 ? "..." : ""})
-                                </span>
-                              </div>
-                            );
-                          })()}
-                        </td>
-
-                        {/* Project & Customer */}
-                        <td>
-                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{item.projectName}</div>
-                          <small style={{ color: "#64748b", display: "block" }}>{item.customerName}</small>
-                        </td>
-
-                        {/* Env & Cloud & Region */}
-                        <td>
-                          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                            <span style={{
-                              padding: "1px 5px",
-                              borderRadius: 3,
-                              fontSize: 10,
-                              background: item.env === "生产" ? "#dcfce7" : "#f1f5f9",
-                              color: item.env === "生产" ? "#15803d" : "#475569"
-                            }}>
-                              {item.env || "生产"}
-                            </span>
-                            <span style={{ color: "#2563eb", fontWeight: 500, fontSize: 11 }}>{item.cloudVendor}</span>
-                          </div>
-                          <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>{item.regionName || "-"}</small>
-                        </td>
-
-                        {/* IPs */}
-                        <td>
-                          <div 
-                            style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563eb", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
-                            title="点击进入该设备的详细信息档案"
-                            onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
-                          >
-                            {item.privateIp || item.ip || "-"}
-                          </div>
-                          {item.internalWanIp && (
-                            <small style={{ fontFamily: "monospace", color: "#64748b", display: "block" }}>
-                              内大网: {item.internalWanIp}
-                            </small>
-                          )}
-                        </td>
-
-                        {/* VIP / EIP */}
-                        <td>
-                          {item.vip ? (
-                            <span style={{ fontFamily: "monospace", color: "#7c3aed", fontWeight: 600, display: "block" }}>
-                              VIP: {item.vip}
-                            </span>
-                          ) : null}
-                          {item.eip ? (
-                            <span style={{ fontFamily: "monospace", color: "#059669", display: "block" }}>
-                              EIP: {item.eip}
-                            </span>
-                          ) : null}
-                          {!item.vip && !item.eip && <span style={{ color: "#94a3b8" }}>-</span>}
-                        </td>
-
-                        {/* Resource Spec */}
-                        <td>
-                          <div>
-                            <strong style={{ color: "#1e293b" }}>{item.cpuCores ? `${item.cpuCores}C` : "4C"}</strong> / 
-                            <strong style={{ color: "#1e293b", marginLeft: 2 }}>{item.memoryGb ? `${item.memoryGb}G` : "8G"}</strong>
-                            <span style={{ color: "#64748b", fontSize: 11, marginLeft: 4 }}>({item.cpuArch || "x86_64"})</span>
-                          </div>
-                          <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
-                            盘: {item.systemDiskGb || 30}G {item.dataDiskGb ? `+ ${item.dataDiskGb}G数据` : ""}
-                          </small>
-                        </td>
-
-                        {/* OS & Xinchuang */}
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            {item.isXinchuang === "是" && (
-                              <span 
-                                style={{ background: "#fee2e2", color: "#b91c1c", fontSize: 10, padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}
-                                title="国产信创 OS 认证"
-                              >
-                                🛡️信创
+                      return (
+                        <tr key={item.id} style={{ fontSize: 12 }}>
+                          <td style={{ fontFamily: "monospace", color: "#64748b", fontWeight: 600 }}>
+                            {item.seq || "-"}
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ 
+                                fontSize: 10, 
+                                padding: "1px 5px", 
+                                borderRadius: 3, 
+                                fontWeight: 600,
+                                background: isPhysical ? "#fef3c7" : "#e0f2fe", 
+                                color: isPhysical ? "#b45309" : "#0369a1" 
+                              }}>
+                                {item.deviceType || (isPhysical ? "物理机" : "虚拟机")}
                               </span>
+                              <strong 
+                                style={{ color: "#1d4ed8", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+                                title="点击进入该设备的详细信息档案 (规格/数据库/中间件/备份/运维)"
+                                onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
+                              >
+                                {item.name}
+                              </strong>
+                            </div>
+                            {isPhysical && (item as any).model && (
+                              <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
+                                {(item as any).brand} {(item as any).model} · 码: {(item as any).assetNo}
+                              </small>
                             )}
-                            <span style={{ fontWeight: 500, color: "#334155" }}>
-                              {item.osFamily || (item as any).os || "Linux"}
+                            {/* 微徽章: 关联数据库与中间件 */}
+                            {(() => {
+                              const ip = item.privateIp || item.ip;
+                              const dCount = databases.filter(d => (ip && d.privateIp === ip) || d.projectName === item.projectName).length;
+                              const mCount = middlewares.filter(m => (ip && m.privateIp === ip) || m.projectName === item.projectName).length;
+                              if (dCount === 0 && mCount === 0) return null;
+                              return (
+                                <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                  {dCount > 0 && (
+                                    <span 
+                                      style={{ fontSize: 9, background: "#e0e7ff", color: "#3730a3", padding: "1px 4px", borderRadius: 3, cursor: "pointer", fontWeight: 600 }}
+                                      onClick={(e) => { e.stopPropagation(); setDetailAsset(item); setDetailTab("database"); }}
+                                      title="查看挂载数据库"
+                                    >
+                                      🗄️ {dCount}个库
+                                    </span>
+                                  )}
+                                  {mCount > 0 && (
+                                    <span 
+                                      style={{ fontSize: 9, background: "#fef3c7", color: "#92400e", padding: "1px 4px", borderRadius: 3, cursor: "pointer", fontWeight: 600 }}
+                                      onClick={(e) => { e.stopPropagation(); setDetailAsset(item); setDetailTab("middleware"); }}
+                                      title="查看运行中间件"
+                                    >
+                                      ⚙️ {mCount}个中间件
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: "#1e293b" }}>{item.projectName}</div>
+                            <small style={{ color: "#64748b", display: "block" }}>{item.customerName}</small>
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <span style={{
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                fontSize: 10,
+                                background: item.env === "生产" ? "#dcfce7" : "#f1f5f9",
+                                color: item.env === "生产" ? "#15803d" : "#475569"
+                              }}>
+                                {item.env}
+                              </span>
+                              <span style={{ fontSize: 11, color: "#475569" }}>{item.cloudVendor}</span>
+                            </div>
+                            <small style={{ color: "#64748b", display: "block" }}>{item.regionName}</small>
+                          </td>
+                          <td>
+                            <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
+                              {item.privateIp || item.ip || "-"}
+                            </div>
+                            {item.internalWanIp && (
+                              <small style={{ fontFamily: "monospace", color: "#64748b", display: "block" }}>
+                                内大: {item.internalWanIp}
+                              </small>
+                            )}
+                          </td>
+                          <td>
+                            {item.vip ? (
+                              <span style={{ fontFamily: "monospace", fontSize: 11, background: "#fef3c7", color: "#92400e", padding: "1px 4px", borderRadius: 3, fontWeight: 600 }}>
+                                VIP: {item.vip}
+                              </span>
+                            ) : item.eip ? (
+                              <span style={{ fontFamily: "monospace", fontSize: 11, background: "#eff6ff", color: "#1e40af", padding: "1px 4px", borderRadius: 3, fontWeight: 600 }}>
+                                EIP: {item.eip}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#cbd5e1" }}>-</span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ fontSize: 11, color: "#1e293b" }}>
+                              <strong>{item.cpuCores || 4}核</strong> · {item.memoryGb || 16}GB
+                            </div>
+                            <small style={{ color: "#64748b" }}>
+                              盘: {(item.systemDiskGb || 0) + (item.dataDiskGb || 0)}GB
+                            </small>
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ 
+                                fontSize: 10, 
+                                padding: "1px 5px", 
+                                borderRadius: 3, 
+                                fontWeight: 700,
+                                background: item.isXinchuang === "是" ? "#fee2e2" : "#f1f5f9",
+                                color: item.isXinchuang === "是" ? "#dc2626" : "#475569"
+                              }}>
+                                {item.isXinchuang === "是" ? "🛡️信创" : "常规"}
+                              </span>
+                              <span style={{ fontSize: 11, color: "#334155" }} title={item.osVersion || ""}>
+                                {item.osFamily || "Linux"}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ fontFamily: "monospace", color: "#d97706", fontWeight: 600 }}>
+                            {item.remotePort || 22}
+                          </td>
+                          <td>
+                            <span style={{ 
+                              fontSize: 11, 
+                              color: "#64748b", 
+                              display: "-webkit-box", 
+                              WebkitLineClamp: 2, 
+                              WebkitBoxOrient: "vertical", 
+                              overflow: "hidden" 
+                            }}>
+                              {item.remarks || "-"}
                             </span>
-                          </div>
-                          <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
-                            {item.osVersion || ""}
-                          </small>
-                        </td>
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            <div style={{ display: "flex", justifyContent: "center", gap: 4 }}>
+                              <button 
+                                className="btn-secondary" 
+                                style={{ padding: "2px 6px", fontSize: 11, color: "#1d4ed8", borderColor: "#bfdbfe", background: "#eff6ff", fontWeight: 600 }}
+                                onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
+                                title="查看该设备的详细信息档案"
+                              >
+                                📖 详情
+                              </button>
+                              <button 
+                                className="btn-secondary" 
+                                style={{ padding: "2px 6px", fontSize: 11, color: "#b45309", borderColor: "#fde68a", background: "#fffbeb" }}
+                                onClick={() => openEditModal(item)}
+                                title="修改该资产配置"
+                              >
+                                ✏️修改
+                              </button>
+                              <button 
+                                className="btn-secondary" 
+                                style={{ padding: "2px 6px", fontSize: 11, color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2" }}
+                                onClick={() => setDeletingAsset(item)}
+                                title="注销删除该设备"
+                              >
+                                🗑️删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            )}
 
-                        {/* Remote Port */}
-                        <td style={{ fontFamily: "monospace", color: "#475569" }}>
-                          {item.remotePort || 22}
+            {/* ── 03-数据库 台账表格 (Sheet 03) ── */}
+            {activeDimension === "database" && (
+              <table className="cmdb-data-table" style={{ minWidth: 1200 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ width: 45 }}>序号</th>
+                    <th style={{ width: 170 }}>所属项目 · 客户单位</th>
+                    <th style={{ width: 140 }}>数据库大类 · 软件</th>
+                    <th style={{ width: 90 }}>版本</th>
+                    <th style={{ width: 70 }}>端口</th>
+                    <th style={{ width: 120 }}>实例名 / SID</th>
+                    <th style={{ width: 130 }}>业务库名</th>
+                    <th style={{ width: 90 }}>部署模式</th>
+                    <th style={{ width: 140 }}>集群名称</th>
+                    <th style={{ width: 140 }}>私有业务IP</th>
+                    <th style={{ width: 120 }}>VIP / EIP</th>
+                    <th style={{ width: 70 }}>状态</th>
+                    <th style={{ width: 150 }}>备注说明</th>
+                    <th style={{ width: 80, textAlign: "center" }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedDatabases.length === 0 ? (
+                    <tr>
+                      <td colSpan={14} style={{ textAlign: "center", padding: "36px 0", color: "#94a3b8" }}>
+                        当前项目下暂无符合筛选条件的数据库台账记录
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedDatabases.map(db => (
+                      <tr key={db.id} style={{ fontSize: 12 }}>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontWeight: 600 }}>
+                          {db.seq || "-"}
                         </td>
-
-                        {/* Remarks */}
-                        <td style={{ color: "#64748b" }} title={item.remarks || ""}>
-                          <span style={{ 
-                            display: "-webkit-box", 
-                            WebkitLineClamp: 2, 
-                            WebkitBoxOrient: "vertical", 
-                            overflow: "hidden" 
+                        <td>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{db.projectName}</div>
+                          <small style={{ color: "#64748b", display: "block" }}>{db.customerName}</small>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 700, color: "#4338ca" }}>{db.dbSoftware || db.type}</div>
+                          <small style={{ color: "#64748b", fontSize: 10 }}>{db.dbCategory || "关系型"}</small>
+                        </td>
+                        <td>
+                          <code style={{ background: "#f1f5f9", padding: "1px 4px", borderRadius: 3, fontSize: 11, color: "#2563eb", fontWeight: 600 }}>
+                            {db.version || "-"}
+                          </code>
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#d97706", fontWeight: 700 }}>
+                          {db.port}
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
+                          {db.instanceSid || "-"}
+                        </td>
+                        <td style={{ color: "#0369a1", fontWeight: 600 }}>
+                          {db.dbName || "-"}
+                        </td>
+                        <td>
+                          <span style={{
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            background: db.deployMode === "集群" ? "#e0e7ff" : (db.deployMode === "分布式" ? "#fef3c7" : "#f1f5f9"),
+                            color: db.deployMode === "集群" ? "#3730a3" : (db.deployMode === "分布式" ? "#92400e" : "#475569")
                           }}>
-                            {item.remarks || "-"}
+                            {db.deployMode || "单机"}
                           </span>
                         </td>
-
-                        {/* Actions */}
+                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#475569" }}>
+                          {db.clusterName || "-"}
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
+                          {db.privateIp || db.hostIp}
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#d97706" }}>
+                          {db.vipEip || "-"}
+                        </td>
+                        <td>
+                          <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 11 }}>
+                            ● {db.status === "active" ? "在线" : db.status}
+                          </span>
+                        </td>
+                        <td style={{ color: "#64748b", fontSize: 11 }}>
+                          {db.remarks || "-"}
+                        </td>
                         <td style={{ textAlign: "center" }}>
-                          <div style={{ display: "flex", justifyContent: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "2px 6px", fontSize: 11, color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2" }}
+                            onClick={() => onDeleteDatabase?.(db.id)}
+                            title="删除该数据库台账"
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {/* ── 04-中间件 服务表格 (Sheet 04) ── */}
+            {activeDimension === "middleware" && (
+              <table className="cmdb-data-table" style={{ minWidth: 1200 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ width: 45 }}>序号</th>
+                    <th style={{ width: 170 }}>所属项目 · 客户单位</th>
+                    <th style={{ width: 160 }}>中间件类型</th>
+                    <th style={{ width: 160 }}>中间件软件名称</th>
+                    <th style={{ width: 100 }}>软件版本</th>
+                    <th style={{ width: 100 }}>服务端口</th>
+                    <th style={{ width: 110 }}>角色 / 运行时</th>
+                    <th style={{ width: 140 }}>私有业务 IP</th>
+                    <th style={{ width: 110 }}>环境 · 云商</th>
+                    <th style={{ width: 70 }}>运行状态</th>
+                    <th style={{ width: 150 }}>备注说明</th>
+                    <th style={{ width: 80, textAlign: "center" }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedMiddlewares.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} style={{ textAlign: "center", padding: "36px 0", color: "#94a3b8" }}>
+                        当前项目下暂无符合筛选条件的中间件服务记录
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedMiddlewares.map(mw => (
+                      <tr key={mw.id} style={{ fontSize: 12 }}>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontWeight: 600 }}>
+                          {mw.seq || "-"}
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{mw.projectName}</div>
+                          <small style={{ color: "#64748b", display: "block" }}>{mw.customerName}</small>
+                        </td>
+                        <td>
+                          <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                            {mw.mwType}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 700, color: "#1e293b" }}>
+                          {mw.mwSoftware || mw.name}
+                        </td>
+                        <td>
+                          <code style={{ background: "#f1f5f9", padding: "1px 4px", borderRadius: 3, fontSize: 11, color: "#2563eb", fontWeight: 600 }}>
+                            {mw.version || "-"}
+                          </code>
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#d97706", fontWeight: 700 }}>
+                          {mw.port || "-"}
+                        </td>
+                        <td>
+                          <div style={{ fontSize: 11, color: "#475569" }}>{mw.role || "-"}</div>
+                          <small style={{ color: "#0d9488", fontWeight: 600 }}>{mw.runtime || ""}</small>
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
+                          {mw.privateIp}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 10, padding: "1px 4px", borderRadius: 3, background: mw.env === "生产" ? "#dcfce7" : "#f1f5f9", color: mw.env === "生产" ? "#15803d" : "#475569" }}>
+                            {mw.env}
+                          </span>{" "}
+                          <span style={{ fontSize: 11, color: "#64748b" }}>{mw.cloudVendor}</span>
+                        </td>
+                        <td>
+                          <span style={{ color: mw.status === "running" ? "#16a34a" : "#dc2626", fontWeight: 700, fontSize: 11 }}>
+                            ● {mw.status === "running" ? "运行中" : "已停止"}
+                          </span>
+                        </td>
+                        <td style={{ color: "#64748b", fontSize: 11 }}>
+                          {mw.remarks || "-"}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "2px 6px", fontSize: 11, color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2" }}
+                            onClick={() => onDeleteMiddleware?.(mw.id)}
+                            title="删除该中间件"
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {/* ── 05-备份 策略表格 (Sheet 05) ── */}
+            {activeDimension === "backup" && (
+              <table className="cmdb-data-table" style={{ minWidth: 1200 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ width: 45 }}>序号</th>
+                    <th style={{ width: 170 }}>所属项目 · 客户单位</th>
+                    <th style={{ width: 140 }}>私有业务 IP</th>
+                    <th style={{ width: 90 }}>备份类型</th>
+                    <th style={{ width: 100 }}>备份方式</th>
+                    <th style={{ width: 140 }}>备份策略</th>
+                    <th style={{ width: 220 }}>备份存储位置</th>
+                    <th style={{ width: 80 }}>保留天数</th>
+                    <th style={{ width: 130 }}>上次执行时间</th>
+                    <th style={{ width: 80 }}>状态</th>
+                    <th style={{ width: 150 }}>备注说明</th>
+                    <th style={{ width: 80, textAlign: "center" }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedBackups.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} style={{ textAlign: "center", padding: "36px 0", color: "#94a3b8" }}>
+                        当前项目下暂无符合筛选条件的备份策略记录
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedBackups.map(bk => (
+                      <tr key={bk.id} style={{ fontSize: 12 }}>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontWeight: 600 }}>
+                          {bk.seq || "-"}
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{bk.projectName}</div>
+                          <small style={{ color: "#64748b", display: "block" }}>{bk.customerName}</small>
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
+                          {bk.privateIp}
+                        </td>
+                        <td>
+                          <span style={{ 
+                            background: bk.backupType === "数据库" ? "#e0e7ff" : (bk.backupType === "对象存储" ? "#fef3c7" : "#dcfce7"),
+                            color: bk.backupType === "数据库" ? "#3730a3" : (bk.backupType === "对象存储" ? "#92400e" : "#15803d"),
+                            padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 
+                          }}>
+                            {bk.backupType}
+                          </span>
+                        </td>
+                        <td style={{ color: "#334155", fontWeight: 600 }}>
+                          {bk.backupMethod}
+                        </td>
+                        <td>
+                          <span style={{ background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", padding: "1px 6px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                            {bk.backupPolicy}
+                          </span>
+                        </td>
+                        <td style={{ color: "#475569", fontSize: 11 }}>
+                          {bk.storageLocation}
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 700 }}>
+                          {bk.retentionDays ? `${bk.retentionDays}天` : "-"}
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontSize: 11 }}>
+                          {bk.lastBackupTime || "-"}
+                        </td>
+                        <td>
+                          <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 11 }}>
+                            ● 正常
+                          </span>
+                        </td>
+                        <td style={{ color: "#64748b", fontSize: 11 }}>
+                          {bk.remarks || "-"}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "2px 6px", fontSize: 11, color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2" }}
+                            onClick={() => onDeleteBackup?.(bk.id)}
+                            title="删除该备份策略"
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {/* ── 06-运维 保障表格 (Sheet 06) ── */}
+            {activeDimension === "ops" && (
+              <table className="cmdb-data-table" style={{ minWidth: 1200 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ width: 45 }}>序号</th>
+                    <th style={{ width: 170 }}>所属项目 · 客户单位</th>
+                    <th style={{ width: 140 }}>私有业务 IP</th>
+                    <th style={{ width: 170 }}>运维保障厂商</th>
+                    <th style={{ width: 150 }}>VPN接入地址</th>
+                    <th style={{ width: 110 }}>VPN账号</th>
+                    <th style={{ width: 180 }}>堡垒机(JumpServer)</th>
+                    <th style={{ width: 110 }}>堡垒机账号</th>
+                    <th style={{ width: 220 }}>访问服务器地址 / 命令</th>
+                    <th style={{ width: 80 }}>监控覆盖</th>
+                    <th style={{ width: 70 }}>巡检周期</th>
+                    <th style={{ width: 70 }}>变更窗口</th>
+                    <th style={{ width: 110 }}>网络分区 · 暴露</th>
+                    <th style={{ width: 80, textAlign: "center" }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedOpsRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={14} style={{ textAlign: "center", padding: "36px 0", color: "#94a3b8" }}>
+                        当前项目下暂无符合筛选条件的运维保障记录
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedOpsRecords.map(op => (
+                      <tr key={op.id} style={{ fontSize: 12 }}>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontWeight: 600 }}>
+                          {op.seq || "-"}
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{op.projectName}</div>
+                          <small style={{ color: "#64748b", display: "block" }}>{op.customerName}</small>
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
+                          {op.privateIp}
+                        </td>
+                        <td style={{ fontWeight: 600, color: "#1e293b" }}>
+                          {op.opsVendor}
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#2563eb", fontSize: 11 }}>
+                          {op.vpnAddress || "-"}
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontSize: 11 }}>
+                          {op.vpnAccount || "-"}
+                        </td>
+                        <td>
+                          <a 
+                            href={op.bastionAddress?.startsWith("http") ? op.bastionAddress : `https://${op.bastionAddress}`}
+                            target="_blank" 
+                            rel="noreferrer"
+                            style={{ color: "#7c3aed", fontWeight: 600, fontSize: 11, textDecoration: "underline" }}
+                          >
+                            {op.bastionAddress || "-"}
+                          </a>
+                        </td>
+                        <td style={{ fontFamily: "monospace", color: "#64748b", fontSize: 11 }}>
+                          {op.bastionAccount || "-"}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <code style={{ background: "#f1f5f9", padding: "2px 5px", borderRadius: 4, fontSize: 11, color: "#0f172a", fontFamily: "monospace" }}>
+                              {op.serverAccessAddress || `ssh root@${op.privateIp}`}
+                            </code>
                             <button 
-                              className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11, color: "#1d4ed8", borderColor: "#bfdbfe", background: "#eff6ff", fontWeight: 600 }}
-                              onClick={() => { setDetailAsset(item); setDetailTab("spec"); }}
-                              title="查看该设备的详细信息档案 (硬件规格、操作系统、网络拓扑)"
+                              type="button"
+                              className="btn-secondary"
+                              style={{ padding: "1px 5px", fontSize: 10 }}
+                              onClick={() => copyToClipboard(op.serverAccessAddress || `ssh root@${op.privateIp}`, "SSH命令")}
                             >
-                              📖 详情
-                            </button>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11, color: "#0d9488", borderColor: "#99f6e4", background: "#f0fdfa" }}
-                              onClick={() => { setDetailAsset(item); setDetailTab("software"); }}
-                              title="查看或配置该机器运行的数据库、中间件与插件"
-                            >
-                              🧩软件
-                            </button>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11, color: "#2563eb", borderColor: "#bfdbfe", background: "#eff6ff" }}
-                              onClick={() => { setDetailAsset(item); setDetailTab("ops"); }}
-                              title="查看系统登录链接、SSH直连与VPN通道"
-                            >
-                              🚀运维
-                            </button>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11, color: "#b45309", borderColor: "#fde68a", background: "#fffbeb" }}
-                              onClick={() => openEditModal(item)}
-                              title="修改该资产配置与台账信息"
-                            >
-                              ✏️修改
-                            </button>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ padding: "2px 6px", fontSize: 11, color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2" }}
-                              onClick={() => setDeletingAsset(item)}
-                              title="从资产库注销删除该设备"
-                            >
-                              🗑️删除
+                              复制
                             </button>
                           </div>
                         </td>
+                        <td>
+                          <span style={{ color: op.monitoringCoverage === "是" ? "#16a34a" : "#ca8a04", fontWeight: 700, fontSize: 11 }}>
+                            {op.monitoringCoverage}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ background: "#f1f5f9", color: "#475569", padding: "1px 5px", borderRadius: 3, fontSize: 11 }}>
+                            {op.inspectionCycle}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ color: "#b45309", fontWeight: 600, fontSize: 11 }}>
+                            {op.changeWindow}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: 10, color: "#334155" }}>{op.networkZone}</div>
+                          <small style={{ color: op.exposureSurface === "公网" ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
+                            {op.exposureSurface}
+                          </small>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "2px 6px", fontSize: 11, color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2" }}
+                            onClick={() => onDeleteOpsRecord?.(op.id)}
+                            title="删除该运维保障记录"
+                          >
+                            🗑️
+                          </button>
+                        </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
 
-          {/* Pagination Footer */}
+          {/* Pagination Footer (Aligned with 5 dimensions) */}
           <div style={{ 
             display: "flex", 
             justifyContent: "space-between", 
@@ -1700,15 +2585,52 @@ export default function HostManagement({
             color: "#475569"
           }}>
             <div>
-              {currentProject ? `【${currentProject.name}】` : "全量资产"} 共{" "}
-              <strong style={{ color: "#0f172a" }}>{displayedAssets.length}</strong> 条记录
+              {currentProject ? `【${currentProject.name}】` : "全量项目总览"}
+              <span style={{ 
+                margin: "0 6px", 
+                padding: "2px 8px", 
+                borderRadius: 4, 
+                fontSize: 11, 
+                fontWeight: 600,
+                background: activeDimension === "hardware" ? "#eff6ff" : (
+                  activeDimension === "database" ? "#eef2ff" : (
+                    activeDimension === "middleware" ? "#fffbeb" : (
+                      activeDimension === "backup" ? "#ecfdf5" : "#f5f3ff"
+                    )
+                  )
+                ),
+                color: activeDimension === "hardware" ? "#1d4ed8" : (
+                  activeDimension === "database" ? "#4338ca" : (
+                    activeDimension === "middleware" ? "#b45309" : (
+                      activeDimension === "backup" ? "#047857" : "#6d28d9"
+                    )
+                  )
+                )
+              }}>
+                {activeDimension === "hardware" ? "🖥️ 02-硬件设备" : (
+                  activeDimension === "database" ? "🗄️ 03-数据库" : (
+                    activeDimension === "middleware" ? "⚙️ 04-中间件" : (
+                      activeDimension === "backup" ? "💾 05-备份策略" : "🛡️ 06-运维保障"
+                    )
+                  )
+                )}
+              </span>
+              共 <strong style={{ color: "#0f172a" }}>{currentDimTotal}</strong> 条记录
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span>每页展示:</span>
               <select 
                 value={pageSize} 
-                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                onChange={e => { 
+                  const sz = Number(e.target.value);
+                  setPageSize(sz); 
+                  setCurrentPage(1); 
+                  setDbPage(1);
+                  setMwPage(1);
+                  setBkPage(1);
+                  setOpsPage(1);
+                }}
                 style={{ padding: "2px 6px", fontSize: 12 }}
               >
                 <option value={15}>15 条</option>
@@ -1720,21 +2642,21 @@ export default function HostManagement({
               <button 
                 className="btn-secondary" 
                 style={{ padding: "3px 8px", fontSize: 11 }}
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentDimPage <= 1}
+                onClick={() => setCurrentDimPage(prev => Math.max(1, prev - 1))}
               >
                 ‹ 上一页
               </button>
 
               <span>
-                第 <strong style={{ color: "#2563eb" }}>{currentPage}</strong> / {totalPages} 页
+                第 <strong style={{ color: "#2563eb" }}>{currentDimPage}</strong> / {currentDimTotalPages} 页
               </span>
 
               <button 
                 className="btn-secondary" 
                 style={{ padding: "3px 8px", fontSize: 11 }}
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentDimPage >= currentDimTotalPages}
+                onClick={() => setCurrentDimPage(prev => Math.min(currentDimTotalPages, prev + 1))}
               >
                 下一页 ›
               </button>
@@ -1746,10 +2668,10 @@ export default function HostManagement({
       {/* ================= MODAL: DETAIL ASSET METADATA ================= */}
       {detailAsset && (
         <div className="cmdb-modal-mask">
-          <div className="cmdb-modal" style={{ maxWidth: 780, width: "95%" }}>
+          <div className="cmdb-modal" style={{ maxWidth: 840, width: "96%" }}>
             <div className="cmdb-modal-header" style={{ background: "#0f172a", color: "#fff", borderBottom: 0 }}>
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ 
                     background: "#2563eb", 
                     color: "#fff", 
@@ -1758,30 +2680,41 @@ export default function HostManagement({
                     borderRadius: 4, 
                     fontWeight: 600 
                   }}>
-                    序号 #{detailAsset.seq}
+                    序号 #{detailAsset.seq || "-"}
                   </span>
                   <h3 style={{ margin: 0, color: "#fff", fontSize: 16 }}>{detailAsset.name}</h3>
+                  <span style={{
+                    fontSize: 11,
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    background: (detailAsset as any)._kind === "physical" ? "#f59e0b" : "#38bdf8",
+                    color: "#fff",
+                    fontWeight: 600
+                  }}>
+                    {detailAsset.deviceType || ((detailAsset as any)._kind === "physical" ? "物理机" : "虚拟机")}
+                  </span>
                   {detailAsset.isXinchuang === "是" && (
-                    <span style={{ background: "#ef4444", color: "#fff", fontSize: 11, padding: "2px 6px", borderRadius: 4 }}>
+                    <span style={{ background: "#ef4444", color: "#fff", fontSize: 11, padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
                       🛡️ 国产信创 OS
                     </span>
                   )}
                 </div>
                 <small style={{ color: "#94a3b8", display: "block", marginTop: 4 }}>
-                  归属项目: {detailAsset.projectName} · 客户单位: {detailAsset.customerName} · {detailAsset.env}环境
+                  归属项目: {detailAsset.projectName} · 客户单位: {detailAsset.customerName} · {detailAsset.env}环境 · {detailAsset.cloudVendor} ({detailAsset.regionName})
                 </small>
               </div>
               <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setDetailAsset(null)}>×</button>
             </div>
 
-                        <div className="cmdb-modal-body" style={{ maxHeight: "74vh", overflowY: "auto", padding: "16px 20px" }}>
-              {/* Tab Navigation */}
+            <div className="cmdb-modal-body" style={{ maxHeight: "74vh", overflowY: "auto", padding: "16px 20px" }}>
+              {/* 5-Dimension Tabs Aligned with Excel v351 */}
               <div style={{
                 display: "flex",
-                gap: 8,
+                gap: 6,
                 borderBottom: "2px solid #e2e8f0",
                 marginBottom: 16,
-                paddingBottom: 2
+                paddingBottom: 2,
+                flexWrap: "wrap"
               }}>
                 <button 
                   type="button"
@@ -1789,50 +2722,111 @@ export default function HostManagement({
                   style={{
                     border: "none",
                     background: "transparent",
-                    padding: "8px 14px",
+                    padding: "8px 12px",
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: 12,
                     cursor: "pointer",
                     color: detailTab === "spec" ? "#2563eb" : "#64748b",
                     borderBottom: detailTab === "spec" ? "2px solid #2563eb" : "2px solid transparent",
                     marginBottom: -4,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 6
+                    gap: 5
                   }}
                 >
-                  <span>📋</span>
-                  <span>硬件规格与OS</span>
+                  <span>🖥️ 02-硬件规格与OS</span>
                 </button>
 
                 <button 
                   type="button"
-                  onClick={() => setDetailTab("software")}
+                  onClick={() => setDetailTab("database")}
                   style={{
                     border: "none",
                     background: "transparent",
-                    padding: "8px 14px",
+                    padding: "8px 12px",
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: 12,
                     cursor: "pointer",
-                    color: detailTab === "software" ? "#0d9488" : "#64748b",
-                    borderBottom: detailTab === "software" ? "2px solid #0d9488" : "2px solid transparent",
+                    color: detailTab === "database" ? "#4338ca" : "#64748b",
+                    borderBottom: detailTab === "database" ? "2px solid #4338ca" : "2px solid transparent",
                     marginBottom: -4,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 6
+                    gap: 5
                   }}
                 >
-                  <span>🧩</span>
-                  <span>软件·中间件·数据库</span>
+                  <span>🗄️ 03-数据库</span>
                   <span style={{ 
-                    background: detailTab === "software" ? "#ccfbf1" : "#f1f5f9", 
-                    color: detailTab === "software" ? "#0f766e" : "#64748b", 
-                    fontSize: 11, 
+                    background: detailTab === "database" ? "#e0e7ff" : "#f1f5f9", 
+                    color: detailTab === "database" ? "#3730a3" : "#64748b", 
+                    fontSize: 10, 
                     padding: "0 6px", 
-                    borderRadius: 10 
+                    borderRadius: 10,
+                    fontWeight: 700
                   }}>
-                    {currentAssetSoftwares.length}
+                    {detailAssetDbs.length}
+                  </span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setDetailTab("middleware")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: "8px 12px",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    color: detailTab === "middleware" ? "#b45309" : "#64748b",
+                    borderBottom: detailTab === "middleware" ? "2px solid #b45309" : "2px solid transparent",
+                    marginBottom: -4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5
+                  }}
+                >
+                  <span>⚙️ 04-中间件</span>
+                  <span style={{ 
+                    background: detailTab === "middleware" ? "#fef3c7" : "#f1f5f9", 
+                    color: detailTab === "middleware" ? "#92400e" : "#64748b", 
+                    fontSize: 10, 
+                    padding: "0 6px", 
+                    borderRadius: 10,
+                    fontWeight: 700
+                  }}>
+                    {detailAssetMws.length}
+                  </span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setDetailTab("backup")}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: "8px 12px",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    color: detailTab === "backup" ? "#047857" : "#64748b",
+                    borderBottom: detailTab === "backup" ? "2px solid #047857" : "2px solid transparent",
+                    marginBottom: -4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5
+                  }}
+                >
+                  <span>💾 05-数据备份</span>
+                  <span style={{ 
+                    background: detailTab === "backup" ? "#ecfdf5" : "#f1f5f9", 
+                    color: detailTab === "backup" ? "#065f46" : "#64748b", 
+                    fontSize: 10, 
+                    padding: "0 6px", 
+                    borderRadius: 10,
+                    fontWeight: 700
+                  }}>
+                    {detailAssetBks.length}
                   </span>
                 </button>
 
@@ -1842,51 +2836,29 @@ export default function HostManagement({
                   style={{
                     border: "none",
                     background: "transparent",
-                    padding: "8px 14px",
+                    padding: "8px 12px",
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: 12,
                     cursor: "pointer",
-                    color: detailTab === "ops" ? "#7c3aed" : "#64748b",
-                    borderBottom: detailTab === "ops" ? "2px solid #7c3aed" : "2px solid transparent",
+                    color: detailTab === "ops" ? "#6d28d9" : "#64748b",
+                    borderBottom: detailTab === "ops" ? "2px solid #6d28d9" : "2px solid transparent",
                     marginBottom: -4,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 6
+                    gap: 5
                   }}
                 >
-                  <span>🚀</span>
-                  <span>登录与运维通道</span>
+                  <span>🛡️ 06-运维保障</span>
                   <span style={{ 
                     background: detailTab === "ops" ? "#ede9fe" : "#f1f5f9", 
-                    color: detailTab === "ops" ? "#6d28d9" : "#64748b", 
-                    fontSize: 11, 
+                    color: detailTab === "ops" ? "#5b21b6" : "#64748b", 
+                    fontSize: 10, 
                     padding: "0 6px", 
-                    borderRadius: 10 
+                    borderRadius: 10,
+                    fontWeight: 700
                   }}>
-                    {currentAssetChannels.length}
+                    {detailAssetOps.length}
                   </span>
-                </button>
-
-                <button 
-                  type="button"
-                  onClick={() => setDetailTab("vpn")}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    padding: "8px 14px",
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: "pointer",
-                    color: detailTab === "vpn" ? "#ea580c" : "#64748b",
-                    borderBottom: detailTab === "vpn" ? "2px solid #ea580c" : "2px solid transparent",
-                    marginBottom: -4,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6
-                  }}
-                >
-                  <span>🛡️</span>
-                  <span>VPN 专网通道</span>
                 </button>
 
                 {copiedNotice && (
@@ -1896,10 +2868,9 @@ export default function HostManagement({
                 )}
               </div>
 
-              {/* TAB 1: 硬件规格与OS */}
+              {/* ── TAB 1: 02-硬件规格与OS ── */}
               {detailTab === "spec" && (
                 <div>
-                  {/* 基本信息 */}
                   <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0284c7", borderBottom: "1px solid #e0f2fe", paddingBottom: 4 }}>
                     📋 项目与基础归属 (台账基本信息)
                   </h5>
@@ -1909,588 +2880,379 @@ export default function HostManagement({
                     <div><span style={{ color: "#64748b" }}>环境类型:</span> <strong>{detailAsset.env || "-"}</strong></div>
                     <div><span style={{ color: "#64748b" }}>承载云商:</span> <strong style={{ color: "#2563eb" }}>{detailAsset.cloudVendor || "-"}</strong></div>
                     <div><span style={{ color: "#64748b" }}>安全区域:</span> <strong>{detailAsset.regionName || "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>设备大类:</span> <strong>{detailAsset.category || "服务器"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>设备类型:</span> <strong>{detailAsset.deviceType || "虚拟机"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>资产形态:</span> <strong>{detailAsset._kind === "physical" ? "实体物理服务器" : "虚拟计算节点"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>设备形态:</span> <strong>{detailAsset.deviceType || "虚拟机"}</strong></div>
                   </div>
 
-                  {/* 网络信息 */}
-                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0d9488", borderBottom: "1px solid #ccfbf1", paddingBottom: 4 }}>
-                    🌐 网络与 IP 矩阵
-                  </h5>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                      <span style={{ color: "#64748b", display: "block" }}>私有IP（业务IP）:</span>
-                      <code style={{ fontSize: 13, color: "#2563eb", fontWeight: 600 }}>{detailAsset.privateIp || detailAsset.ip || "-"}</code>
-                    </div>
-                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                      <span style={{ color: "#64748b", display: "block" }}>内大网IP:</span>
-                      <code style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>{detailAsset.internalWanIp || "-"}</code>
-                    </div>
-                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                      <span style={{ color: "#64748b", display: "block" }}>VIP 地址:</span>
-                      <code style={{ fontSize: 13, color: "#7c3aed", fontWeight: 600 }}>{detailAsset.vip || "-"}</code>
-                    </div>
-                    <div style={{ background: "#f8fafc", padding: 8, borderRadius: 6 }}>
-                      <span style={{ color: "#64748b", display: "block" }}>EIP / 公网IP:</span>
-                      <code style={{ fontSize: 13, color: "#ea580c", fontWeight: 600 }}>{detailAsset.eip || detailAsset.publicIp || "-"}</code>
-                    </div>
-                  </div>
-
-                  {/* 规格配置 */}
-                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#d97706", borderBottom: "1px solid #fef3c7", paddingBottom: 4 }}>
-                    ⚡ 硬件规格与存储配额
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0284c7", borderBottom: "1px solid #e0f2fe", paddingBottom: 4 }}>
+                    💻 硬件算力规格 (CPU/内存/磁盘)
                   </h5>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                    <div><span style={{ color: "#64748b" }}>CPU 架构:</span> <strong>{detailAsset.cpuArch || "x86_64"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>CPU 核心数:</span> <strong style={{ color: "#b45309" }}>{detailAsset.cpuCores ? `${detailAsset.cpuCores} 核` : "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>内存容量:</span> <strong style={{ color: "#b45309" }}>{detailAsset.memoryGb ? `${detailAsset.memoryGb} GB` : "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>系统盘:</span> <strong>{detailAsset.systemDiskGb ? `${detailAsset.systemDiskGb} GB` : "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>数据盘:</span> <strong>{detailAsset.dataDiskGb ? `${detailAsset.dataDiskGb} GB` : "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>共享磁盘:</span> <strong>{detailAsset.sharedDiskGb ? `${detailAsset.sharedDiskGb} GB` : "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>对象存储:</span> <strong>{detailAsset.objectStorageGb ? `${detailAsset.objectStorageGb} GB` : "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>远程连接端口:</span> <strong style={{ fontFamily: "monospace" }}>{detailAsset.remotePort || 22}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>CPU 架构:</span> <code style={{ background: "#f1f5f9", padding: "1px 4px", borderRadius: 3, fontWeight: 600 }}>{detailAsset.cpuArch || "x86_64"}</code></div>
+                    <div><span style={{ color: "#64748b" }}>CPU 核数:</span> <strong style={{ color: "#0284c7" }}>{detailAsset.cpuCores || 4} 核</strong></div>
+                    <div><span style={{ color: "#64748b" }}>内存容量:</span> <strong style={{ color: "#0284c7" }}>{detailAsset.memoryGb || 16} GB</strong></div>
+                    <div><span style={{ color: "#64748b" }}>系统盘容量:</span> <strong>{detailAsset.systemDiskGb || 50} GB</strong></div>
+                    <div><span style={{ color: "#64748b" }}>数据盘容量:</span> <strong>{detailAsset.dataDiskGb || 0} GB</strong></div>
+                    <div><span style={{ color: "#64748b" }}>磁盘总容量:</span> <strong style={{ color: "#16a34a" }}>{(detailAsset.systemDiskGb || 0) + (detailAsset.dataDiskGb || 0)} GB</strong></div>
                   </div>
 
-                  {/* 操作系统 */}
-                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#16a34a", borderBottom: "1px solid #dcfce7", paddingBottom: 4 }}>
-                    🐧 操作系统发行版及内核
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0284c7", borderBottom: "1px solid #e0f2fe", paddingBottom: 4 }}>
+                    🌐 IP 地址网络规划
                   </h5>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
-                    <div><span style={{ color: "#64748b" }}>OS 发行版:</span> <strong>{detailAsset.osFamily || "-"}</strong></div>
-                    <div><span style={{ color: "#64748b" }}>OS 完整版本:</span> <strong>{detailAsset.osVersion || "-"}</strong></div>
-                    <div style={{ gridColumn: "span 2" }}>
-                      <span style={{ color: "#64748b" }}>系统内核版本:</span> 
-                      <code style={{ display: "block", marginTop: 4, background: "#f1f5f9", padding: "4px 8px", borderRadius: 4, fontSize: 11 }}>
-                        {detailAsset.kernelVersion || "Linux Kernel"}
-                      </code>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
+                    <div>
+                      <span style={{ color: "#64748b" }}>私有业务 IP:</span>{" "}
+                      <strong style={{ fontFamily: "monospace", color: "#0f172a" }}>{detailAsset.privateIp || detailAsset.ip || "-"}</strong>
+                      {(detailAsset.privateIp || detailAsset.ip) && (
+                        <button type="button" className="btn-secondary" style={{ padding: "1px 5px", fontSize: 10, marginLeft: 6 }} onClick={() => copyToClipboard(detailAsset.privateIp || detailAsset.ip || "", "业务IP")}>复制</button>
+                      )}
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b" }}>内部大网 IP:</span>{" "}
+                      <strong style={{ fontFamily: "monospace", color: "#0f172a" }}>{detailAsset.internalWanIp || "-"}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b" }}>VIP / EIP:</span>{" "}
+                      <strong style={{ fontFamily: "monospace", color: "#d97706" }}>{detailAsset.vip || detailAsset.eip || "-"}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b" }}>远程连接端口:</span>{" "}
+                      <strong style={{ fontFamily: "monospace", color: "#d97706" }}>{detailAsset.remotePort || 22}</strong>
                     </div>
                   </div>
 
-                  {/* 备注 */}
-                  {detailAsset.remarks && (
-                    <div style={{ background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 6, fontSize: 12 }}>
-                      <strong style={{ color: "#92400e" }}>📌 项目资产台账备注：</strong>
-                      <span style={{ color: "#78350f", marginLeft: 6 }}>{detailAsset.remarks}</span>
+                  <h5 style={{ margin: "0 0 10px", fontSize: 13, color: "#0284c7", borderBottom: "1px solid #e0f2fe", paddingBottom: 4 }}>
+                    🛡️ 操作系统与信创合规
+                  </h5>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 12, marginBottom: 16 }}>
+                    <div><span style={{ color: "#64748b" }}>OS 家族:</span> <strong>{detailAsset.osFamily || "Linux"}</strong></div>
+                    <div><span style={{ color: "#64748b" }}>系统发行版:</span> <strong>{detailAsset.osVersion || "-"}</strong></div>
+                    <div>
+                      <span style={{ color: "#64748b" }}>信创标识:</span>{" "}
+                      <span style={{ 
+                        fontSize: 11, 
+                        fontWeight: 700, 
+                        padding: "1px 6px", 
+                        borderRadius: 3, 
+                        background: detailAsset.isXinchuang === "是" ? "#fee2e2" : "#f1f5f9", 
+                        color: detailAsset.isXinchuang === "是" ? "#dc2626" : "#475569" 
+                      }}>
+                        {detailAsset.isXinchuang === "是" ? "🛡️ 国产信创" : "常规 OS"}
+                      </span>
                     </div>
-                  )}
+                    <div style={{ gridColumn: "span 3" }}>
+                      <span style={{ color: "#64748b" }}>内核版本:</span>{" "}
+                      <code style={{ background: "#f8fafc", padding: "2px 6px", borderRadius: 4, fontSize: 11, fontFamily: "monospace" }}>{detailAsset.kernelVersion || "-"}</code>
+                    </div>
+                  </div>
+
+                  <h5 style={{ margin: "0 0 8px", fontSize: 13, color: "#64748b" }}>📝 备注信息</h5>
+                  <p style={{ margin: 0, fontSize: 12, color: "#475569", background: "#f8fafc", padding: "8px 12px", borderRadius: 6 }}>
+                    {detailAsset.remarks || "暂无特别说明。"}
+                  </p>
                 </div>
               )}
 
-              {/* TAB 2: 软件·中间件·数据库 */}
-              {detailTab === "software" && (
+              {/* ── TAB 2: 03-数据库实例 ── */}
+              {detailTab === "database" && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div>
-                      <h5 style={{ margin: 0, fontSize: 14, color: "#0f766e" }}>
-                        🧩 本节点运行软件与服务组件 ({currentAssetSoftwares.length})
-                      </h5>
-                      <small style={{ color: "#64748b" }}>包含已纳管的数据库实例、应用中间件、运行库与关键插件</small>
-                    </div>
-                    <button 
-                      type="button" 
-                      className="btn-secondary" 
-                      style={{ fontSize: 11, padding: "4px 10px", borderColor: "#99f6e4", background: "#f0fdfa", color: "#0d9488", fontWeight: 600 }}
-                      onClick={() => setShowAddSoftForm(!showAddSoftForm)}
+                    <h5 style={{ margin: 0, fontSize: 13, color: "#4338ca" }}>
+                      🗄️ 节点/项目数据库实例档案 ({detailAssetDbs.length} 个实例)
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 11, padding: "3px 10px", background: "#4f46e5" }}
+                      onClick={() => {
+                        setNewDbDraft(prev => ({
+                          ...prev,
+                          projectName: detailAsset.projectName,
+                          customerName: detailAsset.customerName,
+                          env: detailAsset.env,
+                          cloudVendor: detailAsset.cloudVendor,
+                          regionName: detailAsset.regionName,
+                          privateIp: detailAsset.privateIp || detailAsset.ip || ""
+                        }));
+                        setShowAddDbModal(true);
+                      }}
                     >
-                      {showAddSoftForm ? "✕ 取消登记" : "＋ 登记新软件组件"}
+                      ＋ 挂载新数据库
                     </button>
                   </div>
 
-                  {/* Inline Add Software Form */}
-                  {showAddSoftForm && (
-                    <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 6, padding: 12, marginBottom: 14 }}>
-                      <strong style={{ fontSize: 12, color: "#0f766e", display: "block", marginBottom: 8 }}>
-                        📝 登记新运行软件（绑定至本节点）
-                      </strong>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 12 }}>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>软件名称*</label>
-                          <input 
-                            placeholder="如 MySQL, Nginx, JDK" 
-                            value={newSoftDraft.name} 
-                            onChange={e => setNewSoftDraft({ ...newSoftDraft, name: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>分类*</label>
-                          <select 
-                            value={newSoftDraft.category} 
-                            onChange={e => setNewSoftDraft({ ...newSoftDraft, category: e.target.value as any })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          >
-                            <option value="database">🗄️ 数据库 (Database)</option>
-                            <option value="middleware">⚙️ 中间件 (Middleware)</option>
-                            <option value="web_server">🌐 Web服务 (Web Server)</option>
-                            <option value="plugin">☕ 运行库/插件 (Runtime/Plugin)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>版本号*</label>
-                          <input 
-                            placeholder="如 8.0.32, 1.24.0" 
-                            value={newSoftDraft.version} 
-                            onChange={e => setNewSoftDraft({ ...newSoftDraft, version: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>监听端口</label>
-                          <input 
-                            placeholder="如 3306, 80, 8080" 
-                            value={newSoftDraft.port} 
-                            onChange={e => setNewSoftDraft({ ...newSoftDraft, port: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>安装部署路径</label>
-                          <input 
-                            placeholder="如 /usr/local/nginx" 
-                            value={newSoftDraft.installPath} 
-                            onChange={e => setNewSoftDraft({ ...newSoftDraft, installPath: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>业务用途 / 备注</label>
-                          <input 
-                            placeholder="如 核心业务主库" 
-                            value={newSoftDraft.remarks} 
-                            onChange={e => setNewSoftDraft({ ...newSoftDraft, remarks: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right", marginTop: 8 }}>
-                        <button 
-                          type="button" 
-                          className="btn-primary"
-                          style={{ padding: "4px 12px", fontSize: 12 }}
-                          onClick={() => {
-                            if (!newSoftDraft.name.trim() || !newSoftDraft.version.trim()) {
-                              alert("请填写软件名称与版本号！");
-                              return;
-                            }
-                            const newComponent: SoftwareComponent = {
-                              id: `soft-${Date.now()}`,
-                              assetId: detailAsset.id,
-                              assetName: detailAsset.name,
-                              assetIp: detailAsset.privateIp || detailAsset.ip,
-                              projectId: detailAsset.projectId || "prj-001",
-                              projectName: detailAsset.projectName || "工会互助保险信息系统",
-                              category: newSoftDraft.category,
-                              name: newSoftDraft.name,
-                              version: newSoftDraft.version,
-                              port: newSoftDraft.port || "-",
-                              installPath: newSoftDraft.installPath || "-",
-                              configPath: newSoftDraft.configPath || "-",
-                              status: "running",
-                              remarks: newSoftDraft.remarks || "管理员手工登记"
-                            };
-                            onAddSoftware?.(newComponent);
-                            setShowAddSoftForm(false);
-                            setNewSoftDraft({ name: "", category: "database", version: "", port: "", installPath: "", configPath: "", remarks: "" });
-                          }}
-                        >
-                          确认登记组件
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Softwares Table */}
-                  {currentAssetSoftwares.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", background: "#f8fafc", borderRadius: 6 }}>
-                      暂未为该节点登记运行软件与中间件组件，点击上方「＋ 登记新软件组件」添加。
+                  {detailAssetDbs.length === 0 ? (
+                    <div style={{ padding: "30px 20px", textAlign: "center", background: "#f8fafc", borderRadius: 6, color: "#94a3b8", fontSize: 12 }}>
+                      当前节点未直接部署或挂载独立数据库实例
                     </div>
                   ) : (
-                    <div style={{ border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                        <thead>
-                          <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
-                            <th style={{ padding: "8px 10px" }}>分类</th>
-                            <th style={{ padding: "8px 10px" }}>软件名称及实例</th>
-                            <th style={{ padding: "8px 10px" }}>核心版本号</th>
-                            <th style={{ padding: "8px 10px" }}>监听端口</th>
-                            <th style={{ padding: "8px 10px" }}>部署目录 / 配置文件</th>
-                            <th style={{ padding: "8px 10px" }}>运行状态</th>
-                            <th style={{ padding: "8px 10px" }}>业务备注</th>
-                            <th style={{ padding: "8px 10px", width: 50, textAlign: "center" }}>操作</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {currentAssetSoftwares.map(soft => {
-                            const badgeInfo = soft.category === "database"
-                              ? { label: "🗄️ 数据库", bg: "#e0e7ff", text: "#3730a3" }
-                              : soft.category === "middleware"
-                              ? { label: "⚙️ 中间件", bg: "#fef3c7", text: "#92400e" }
-                              : soft.category === "web_server"
-                              ? { label: "🌐 Web服务", bg: "#e0f2fe", text: "#0369a1" }
-                              : { label: "☕ 运行库/插件", bg: "#dcfce7", text: "#15803d" };
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {detailAssetDbs.map(db => (
+                        <div key={db.id} style={{ border: "1px solid #e0e7ff", borderRadius: 6, padding: "10px 14px", background: "#fbfcfe", fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ background: "#4338ca", color: "#fff", padding: "1px 6px", borderRadius: 3, fontSize: 11, fontWeight: 700 }}>
+                                {db.dbSoftware}
+                              </span>
+                              <strong style={{ color: "#1e293b", fontSize: 13 }}>{db.instanceSid || db.name}</strong>
+                              <span style={{ fontSize: 10, background: "#e0e7ff", color: "#3730a3", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                                {db.deployMode || "单机"}
+                              </span>
+                            </div>
+                            <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 11 }}>● 在线 active</span>
+                          </div>
 
-                            return (
-                              <tr key={soft.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                <td style={{ padding: "8px 10px" }}>
-                                  <span style={{ background: badgeInfo.bg, color: badgeInfo.text, padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-                                    {badgeInfo.label}
-                                  </span>
-                                </td>
-                                <td style={{ padding: "8px 10px", fontWeight: 700, color: "#1e293b" }}>
-                                  {soft.name}
-                                </td>
-                                <td style={{ padding: "8px 10px" }}>
-                                  <code style={{ background: "#f1f5f9", padding: "1px 5px", borderRadius: 3, fontSize: 11, color: "#2563eb", fontWeight: 600 }}>
-                                    {soft.version}
-                                  </code>
-                                </td>
-                                <td style={{ padding: "8px 10px", fontFamily: "monospace", color: "#d97706", fontWeight: 600 }}>
-                                  {soft.port || "-"}
-                                </td>
-                                <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#64748b" }} title={soft.installPath}>
-                                  {soft.installPath || "-"}
-                                </td>
-                                <td style={{ padding: "8px 10px" }}>
-                                  <span style={{ color: soft.status === "running" ? "#16a34a" : "#dc2626", fontWeight: 600, fontSize: 11 }}>
-                                    ● {soft.status === "running" ? "活跃运行" : "停止"}
-                                  </span>
-                                </td>
-                                <td style={{ padding: "8px 10px", color: "#64748b" }}>
-                                  {soft.remarks || "-"}
-                                </td>
-                                <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                                  <button 
-                                    type="button" 
-                                    onClick={() => onDeleteSoftware?.(soft.id)}
-                                    style={{ border: "none", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12 }}
-                                    title="删除此软件实例"
-                                  >
-                                    ✕
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, color: "#475569" }}>
+                            <div>软件大类: <strong>{db.dbCategory || "关系型"}</strong></div>
+                            <div>软件版本: <code style={{ color: "#2563eb", fontWeight: 600 }}>{db.version}</code></div>
+                            <div>服务端口: <strong style={{ color: "#d97706", fontFamily: "monospace" }}>{db.port}</strong></div>
+                            <div>业务库名: <strong style={{ color: "#0369a1" }}>{db.dbName || "-"}</strong></div>
+                            <div>绑定 IP: <strong style={{ fontFamily: "monospace" }}>{db.privateIp || db.hostIp}</strong></div>
+                            <div>VIP/EIP: <strong style={{ fontFamily: "monospace", color: "#d97706" }}>{db.vipEip || "-"}</strong></div>
+                            {db.clusterName && <div style={{ gridColumn: "span 3" }}>集群/组名: <strong style={{ color: "#4338ca" }}>{db.clusterName}</strong></div>}
+                          </div>
+                          {db.remarks && <small style={{ color: "#94a3b8", display: "block", marginTop: 4 }}>说明: {db.remarks}</small>}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* TAB 3: 登录与运维通道 */}
+              {/* ── TAB 3: 04-中间件服务 ── */}
+              {detailTab === "middleware" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <h5 style={{ margin: 0, fontSize: 13, color: "#b45309" }}>
+                      ⚙️ 节点中间件服务档案 ({detailAssetMws.length} 个服务)
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 11, padding: "3px 10px", background: "#d97706" }}
+                      onClick={() => {
+                        setNewMwDraft(prev => ({
+                          ...prev,
+                          projectName: detailAsset.projectName,
+                          customerName: detailAsset.customerName,
+                          env: detailAsset.env,
+                          cloudVendor: detailAsset.cloudVendor,
+                          regionName: detailAsset.regionName,
+                          privateIp: detailAsset.privateIp || detailAsset.ip || ""
+                        }));
+                        setShowAddMwModal(true);
+                      }}
+                    >
+                      ＋ 挂载新中间件
+                    </button>
+                  </div>
+
+                  {detailAssetMws.length === 0 ? (
+                    <div style={{ padding: "30px 20px", textAlign: "center", background: "#f8fafc", borderRadius: 6, color: "#94a3b8", fontSize: 12 }}>
+                      当前节点暂无独立登记的中间件组件
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {detailAssetMws.map(mw => (
+                        <div key={mw.id} style={{ border: "1px solid #fed7aa", borderRadius: 6, padding: "10px 14px", background: "#fffdfa", fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ background: "#d97706", color: "#fff", padding: "1px 6px", borderRadius: 3, fontSize: 11, fontWeight: 700 }}>
+                                {mw.mwSoftware}
+                              </span>
+                              <strong style={{ color: "#1e293b", fontSize: 13 }}>{mw.name}</strong>
+                              <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                                {mw.mwType}
+                              </span>
+                            </div>
+                            <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 11 }}>● 运行中 running</span>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, color: "#475569" }}>
+                            <div>版本: <code style={{ color: "#2563eb", fontWeight: 600 }}>{mw.version || "-"}</code></div>
+                            <div>端口: <strong style={{ color: "#d97706", fontFamily: "monospace" }}>{mw.port || "-"}</strong></div>
+                            <div>角色: <strong>{mw.role || "-"}</strong></div>
+                            <div>运行时: <strong style={{ color: "#0d9488" }}>{mw.runtime || "-"}</strong></div>
+                            <div>运行环境: <span>{mw.env} · {mw.cloudVendor}</span></div>
+                            <div>监听 IP: <strong style={{ fontFamily: "monospace" }}>{mw.privateIp}</strong></div>
+                          </div>
+                          {mw.remarks && <small style={{ color: "#94a3b8", display: "block", marginTop: 4 }}>说明: {mw.remarks}</small>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB 4: 05-数据备份方案 ── */}
+              {detailTab === "backup" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <h5 style={{ margin: 0, fontSize: 13, color: "#047857" }}>
+                      💾 数据备份策略方案 ({detailAssetBks.length} 条策略)
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 11, padding: "3px 10px", background: "#059669" }}
+                      onClick={() => {
+                        setNewBkDraft(prev => ({
+                          ...prev,
+                          projectName: detailAsset.projectName,
+                          customerName: detailAsset.customerName,
+                          env: detailAsset.env,
+                          cloudVendor: detailAsset.cloudVendor,
+                          regionName: detailAsset.regionName,
+                          privateIp: detailAsset.privateIp || detailAsset.ip || ""
+                        }));
+                        setShowAddBkModal(true);
+                      }}
+                    >
+                      ＋ 登记新备份
+                    </button>
+                  </div>
+
+                  {detailAssetBks.length === 0 ? (
+                    <div style={{ padding: "30px 20px", textAlign: "center", background: "#f8fafc", borderRadius: 6, color: "#94a3b8", fontSize: 12 }}>
+                      当前节点所属项目暂无独立登记的备份策略
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {detailAssetBks.map(bk => (
+                        <div key={bk.id} style={{ border: "1px solid #a7f3d0", borderRadius: 6, padding: "10px 14px", background: "#f0fdf4", fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ background: "#059669", color: "#fff", padding: "1px 6px", borderRadius: 3, fontSize: 11, fontWeight: 700 }}>
+                                {bk.backupType}
+                              </span>
+                              <strong style={{ color: "#065f46", fontSize: 13 }}>{bk.backupPolicy}</strong>
+                              <span style={{ background: "#dcfce7", color: "#15803d", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                                {bk.backupMethod}
+                              </span>
+                            </div>
+                            <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 11 }}>● 自动执行已生效</span>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, color: "#374151" }}>
+                            <div>存储介质/位置: <strong>{bk.storageLocation}</strong></div>
+                            <div>数据保留周期: <strong style={{ color: "#2563eb" }}>{bk.retentionDays} 天</strong></div>
+                            <div>上次完成时间: <span style={{ fontFamily: "monospace", color: "#64748b" }}>{bk.lastBackupTime || "2026-09-20 02:00:00"}</span></div>
+                            <div>私有业务 IP: <span style={{ fontFamily: "monospace" }}>{bk.privateIp}</span></div>
+                          </div>
+                          {bk.remarks && <small style={{ color: "#64748b", display: "block", marginTop: 4 }}>说明: {bk.remarks}</small>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB 5: 06-运维保障通道 ── */}
               {detailTab === "ops" && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div>
-                      <h5 style={{ margin: 0, fontSize: 14, color: "#6d28d9" }}>
-                        🚀 登录系统与运维直连通道 ({currentAssetChannels.length})
-                      </h5>
-                      <small style={{ color: "#64748b" }}>包含业务管理后台直达链接、SSH/RDP快速登录指令与堡垒机入口</small>
-                    </div>
-                    <button 
-                      type="button" 
-                      className="btn-secondary" 
-                      style={{ fontSize: 11, padding: "4px 10px", borderColor: "#ddd6fe", background: "#f5f3ff", color: "#7c3aed", fontWeight: 600 }}
-                      onClick={() => setShowAddChanForm(!showAddChanForm)}
+                    <h5 style={{ margin: 0, fontSize: 13, color: "#6d28d9" }}>
+                      🛡️ 运维保障渠道与访问规范 ({detailAssetOps.length} 条记录)
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 11, padding: "3px 10px", background: "#7c3aed" }}
+                      onClick={() => {
+                        setNewOpsDraft(prev => ({
+                          ...prev,
+                          projectName: detailAsset.projectName,
+                          customerName: detailAsset.customerName,
+                          env: detailAsset.env,
+                          cloudVendor: detailAsset.cloudVendor,
+                          regionName: detailAsset.regionName,
+                          privateIp: detailAsset.privateIp || detailAsset.ip || ""
+                        }));
+                        setShowAddOpsModal(true);
+                      }}
                     >
-                      {showAddChanForm ? "✕ 取消添加" : "＋ 添加运维通道/登录链接"}
+                      ＋ 登记新运维保障
                     </button>
                   </div>
 
-                  {/* Inline Add Channel Form */}
-                  {showAddChanForm && (
-                    <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 6, padding: 12, marginBottom: 14 }}>
-                      <strong style={{ fontSize: 12, color: "#6d28d9", display: "block", marginBottom: 8 }}>
-                        📝 录入新运维通道或登录入口
-                      </strong>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 8, fontSize: 12 }}>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>通道名称*</label>
-                          <input 
-                            placeholder="如 业务管理后台 / SSH 直连" 
-                            value={newChanDraft.name} 
-                            onChange={e => setNewChanDraft({ ...newChanDraft, name: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>通道类型*</label>
-                          <select 
-                            value={newChanDraft.channelType} 
-                            onChange={e => setNewChanDraft({ ...newChanDraft, channelType: e.target.value as any })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          >
-                            <option value="web_link">🌐 Web 页面登录链接</option>
-                            <option value="ssh">💻 SSH 远程连接命令</option>
-                            <option value="rdp">🖥️ Windows 远程桌面 (RDP)</option>
-                            <option value="jumpserver">⚡ JumpServer 堡垒机快速协议</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>目标地址 / 命令行*</label>
-                          <input 
-                            placeholder="https://... 或 ssh root@... -p 22" 
-                            value={newChanDraft.urlOrTarget} 
-                            onChange={e => setNewChanDraft({ ...newChanDraft, urlOrTarget: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginTop: 6 }}>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>账号与认证说明</label>
-                          <input 
-                            placeholder="如 admin / 证书免密 (无明文密码)" 
-                            value={newChanDraft.accountNote} 
-                            onChange={e => setNewChanDraft({ ...newChanDraft, accountNote: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: "#475569" }}>备注说明</label>
-                          <input 
-                            placeholder="如 生产统一认证入口" 
-                            value={newChanDraft.remarks} 
-                            onChange={e => setNewChanDraft({ ...newChanDraft, remarks: e.target.value })}
-                            style={{ width: "100%", fontSize: 12, padding: 4 }}
-                          />
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right", marginTop: 8 }}>
-                        <button 
-                          type="button" 
-                          className="btn-primary"
-                          style={{ padding: "4px 12px", fontSize: 12 }}
-                          onClick={() => {
-                            if (!newChanDraft.name.trim() || !newChanDraft.urlOrTarget.trim()) {
-                              alert("请填写通道名称与目标地址！");
-                              return;
-                            }
-                            const newChan: OpsChannel = {
-                              id: `chan-${Date.now()}`,
-                              assetId: detailAsset.id,
-                              assetName: detailAsset.name,
-                              assetIp: detailAsset.privateIp || detailAsset.ip,
-                              projectId: detailAsset.projectId || "prj-001",
-                              projectName: detailAsset.projectName || "工会互助保险信息系统",
-                              channelType: newChanDraft.channelType,
-                              name: newChanDraft.name,
-                              urlOrTarget: newChanDraft.urlOrTarget,
-                              accountNote: newChanDraft.accountNote || "运维授权账号",
-                              remarks: newChanDraft.remarks || "管理员维护通道"
-                            };
-                            onAddChannel?.(newChan);
-                            setShowAddChanForm(false);
-                            setNewChanDraft({ name: "", channelType: "web_link", urlOrTarget: "", accountNote: "", remarks: "" });
-                          }}
-                        >
-                          确认添加通道
-                        </button>
-                      </div>
+                  {detailAssetOps.length === 0 ? (
+                    <div style={{ padding: "30px 20px", textAlign: "center", background: "#f8fafc", borderRadius: 6, color: "#94a3b8", fontSize: 12 }}>
+                      当前节点暂无独立填报的运维专网通道或厂商保障记录
                     </div>
-                  )}
-
-                  {/* Channel Cards */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-                    {currentAssetChannels.map(chan => {
-                      const isWeb = chan.channelType === "web_link";
-                      const isSsh = chan.channelType === "ssh";
-                      const isRdp = chan.channelType === "rdp";
-                      const isVpn = chan.channelType === "vpn";
-
-                      return (
-                        <div key={chan.id} style={{
-                          border: "1px solid #e2e8f0",
-                          borderRadius: 6,
-                          padding: "10px 14px",
-                          background: isWeb ? "#faf5ff" : isSsh ? "#f8fafc" : "#f0fdf4",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 12
-                        }}>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                              <span style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: "1px 6px",
-                                borderRadius: 4,
-                                background: isWeb ? "#ede9fe" : isSsh ? "#e2e8f0" : "#dcfce7",
-                                color: isWeb ? "#6d28d9" : isSsh ? "#334155" : "#15803d"
-                              }}>
-                                {isWeb ? "🌐 网页链接" : isSsh ? "💻 SSH终端" : isRdp ? "🖥️ 远程桌面" : "🛡️ VPN隧道"}
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {detailAssetOps.map(op => (
+                        <div key={op.id} style={{ border: "1px solid #ddd6fe", borderRadius: 6, padding: "12px 14px", background: "#faf5ff", fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <strong style={{ color: "#5b21b6", fontSize: 13 }}>运维保障厂商: {op.opsVendor}</strong>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <span style={{ background: op.monitoringCoverage === "是" ? "#dcfce7" : "#fef3c7", color: op.monitoringCoverage === "是" ? "#15803d" : "#92400e", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                                监控: {op.monitoringCoverage}
                               </span>
-                              <strong style={{ fontSize: 13, color: "#1e293b" }}>{chan.name}</strong>
-                              {chan.accountNote && (
-                                <span style={{ fontSize: 11, color: "#64748b" }}>· 账号: {chan.accountNote}</span>
+                              <span style={{ background: "#ede9fe", color: "#6d28d9", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                                巡检: {op.inspectionCycle}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, color: "#374151" }}>
+                            <div style={{ background: "#fff", padding: "8px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                              <span style={{ color: "#64748b", fontWeight: 600, display: "block" }}>VPN 拨号专线:</span>
+                              <div style={{ fontFamily: "monospace", color: "#1d4ed8", marginTop: 2 }}>{op.vpnAddress || "-"}</div>
+                              <div style={{ color: "#475569", marginTop: 2 }}>账号: <code style={{ color: "#0f172a" }}>{op.vpnAccount || "-"}</code></div>
+                              {op.vpnAddress && (
+                                <button type="button" className="btn-secondary" style={{ padding: "1px 6px", fontSize: 10, marginTop: 4 }} onClick={() => copyToClipboard(`${op.vpnAddress} (账号: ${op.vpnAccount})`, "VPN信息")}>
+                                  复制VPN
+                                </button>
                               )}
                             </div>
 
-                            <div style={{ fontFamily: "monospace", fontSize: 12, color: isWeb ? "#6d28d9" : "#0f172a", background: "#fff", border: "1px solid #cbd5e1", padding: "4px 8px", borderRadius: 4, wordBreak: "break-all" }}>
-                              {chan.urlOrTarget}
+                            <div style={{ background: "#fff", padding: "8px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                              <span style={{ color: "#64748b", fontWeight: 600, display: "block" }}>堡垒机 (JumpServer):</span>
+                              <div style={{ marginTop: 2 }}>
+                                {op.bastionAddress ? (
+                                  <a href={op.bastionAddress.startsWith("http") ? op.bastionAddress : `https://${op.bastionAddress}`} target="_blank" rel="noreferrer" style={{ color: "#7c3aed", fontWeight: 700, textDecoration: "underline" }}>
+                                    {op.bastionAddress}
+                                  </a>
+                                ) : "-"}
+                              </div>
+                              <div style={{ color: "#475569", marginTop: 2 }}>账号: <code style={{ color: "#0f172a" }}>{op.bastionAccount || "-"}</code></div>
+                              {op.bastionAddress && (
+                                <button type="button" className="btn-secondary" style={{ padding: "1px 6px", fontSize: 10, marginTop: 4 }} onClick={() => copyToClipboard(`${op.bastionAddress} (账号: ${op.bastionAccount})`, "堡垒机信息")}>
+                                  复制堡垒机
+                                </button>
+                              )}
                             </div>
-                            {chan.remarks && (
-                              <small style={{ color: "#64748b", display: "block", marginTop: 4 }}>{chan.remarks}</small>
-                            )}
-                          </div>
 
-                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                            {isWeb && (
-                              <button 
-                                type="button" 
-                                className="btn-primary" 
-                                style={{ padding: "4px 10px", fontSize: 11, background: "#7c3aed", borderColor: "#6d28d9" }}
-                                onClick={() => window.open(chan.urlOrTarget, "_blank")}
-                              >
-                                🔗 立即打开
-                              </button>
-                            )}
-                            <button 
-                              type="button" 
-                              className="btn-secondary" 
-                              style={{ padding: "4px 10px", fontSize: 11 }}
-                              onClick={() => copyToClipboard(chan.urlOrTarget, chan.name)}
-                            >
-                              📋 复制内容
-                            </button>
-                            <button 
-                              type="button" 
-                              onClick={() => onDeleteChannel?.(chan.id)}
-                              style={{ border: "none", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12, padding: "0 4px" }}
-                              title="移除此通道"
-                            >
-                              ✕
-                            </button>
+                            <div style={{ gridColumn: "span 2", background: "#fff", padding: "8px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                              <span style={{ color: "#64748b", fontWeight: 600, display: "block" }}>服务器直连指令:</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                                <code style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: 4, color: "#0f172a", fontFamily: "monospace", flex: 1 }}>
+                                  {op.serverAccessAddress || `ssh root@${detailAsset.privateIp || detailAsset.ip} -p ${detailAsset.remotePort || 22}`}
+                                </code>
+                                <button type="button" className="btn-secondary" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => copyToClipboard(op.serverAccessAddress || `ssh root@${detailAsset.privateIp || detailAsset.ip} -p ${detailAsset.remotePort || 22}`, "SSH命令")}>
+                                  复制
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>变更窗口: <strong style={{ color: "#b45309" }}>{op.changeWindow}</strong></div>
+                            <div>网络分区: <strong>{op.networkZone}</strong> · <span style={{ color: op.exposureSurface === "公网" ? "#dc2626" : "#16a34a", fontWeight: 700 }}>{op.exposureSurface}</span></div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 4: VPN 专网通道 */}
-              {detailTab === "vpn" && (
-                <div>
-                  <h5 style={{ margin: "0 0 10px", fontSize: 14, color: "#ea580c" }}>
-                    🛡️ 所属项目 VPN 专网通道配置
-                  </h5>
-                  <p style={{ margin: "0 0 14px", fontSize: 12, color: "#64748b" }}>
-                    运维人员需在外部通过安全 VPN 隧道连接至各政务云/专区，方可访问本机器私网业务与终端。
-                  </p>
-
-                  {currentProjectVpn ? (
-                    <div style={{
-                      background: "#fffaf5",
-                      border: "1px solid #fed7aa",
-                      borderRadius: 8,
-                      padding: 16
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                        <span style={{ fontSize: 20 }}>🛡️</span>
-                        <div>
-                          <strong style={{ fontSize: 15, color: "#9a3412" }}>{currentProjectVpn.name}</strong>
-                          <span style={{ fontSize: 11, color: "#c2410c", background: "#ffedd5", padding: "1px 6px", borderRadius: 4, marginLeft: 8 }}>
-                            {currentProjectVpn.vpnClientType || "SSL VPN"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 14 }}>
-                        <div>
-                          <span style={{ color: "#64748b", display: "block" }}>所属项目:</span>
-                          <strong>{detailAsset.projectName}</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "#64748b", display: "block" }}>承载云厂商 / 区域:</span>
-                          <strong style={{ color: "#2563eb" }}>{detailAsset.cloudVendor} ({detailAsset.regionName || "互联网专区"})</strong>
-                        </div>
-                        <div style={{ gridColumn: "span 2" }}>
-                          <span style={{ color: "#64748b", display: "block", marginBottom: 2 }}>VPN 认证网关地址:</span>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <code style={{ fontSize: 13, background: "#fff", border: "1px solid #fdba74", padding: "4px 8px", borderRadius: 4, color: "#c2410c", fontWeight: 600, flex: 1 }}>
-                              {currentProjectVpn.vpnGateway || currentProjectVpn.urlOrTarget}
-                            </code>
-                            <button 
-                              type="button" 
-                              className="btn-primary" 
-                              style={{ padding: "4px 10px", fontSize: 11, background: "#ea580c", borderColor: "#c2410c" }}
-                              onClick={() => window.open(currentProjectVpn.vpnGateway || currentProjectVpn.urlOrTarget, "_blank")}
-                            >
-                              🔗 前往认证网关
-                            </button>
-                            <button 
-                              type="button" 
-                              className="btn-secondary" 
-                              style={{ padding: "4px 10px", fontSize: 11 }}
-                              onClick={() => copyToClipboard(currentProjectVpn.vpnGateway || currentProjectVpn.urlOrTarget, "VPN网关地址")}
-                            >
-                              📋 复制地址
-                            </button>
-                          </div>
-                        </div>
-                        <div style={{ gridColumn: "span 2" }}>
-                          <span style={{ color: "#64748b", display: "block" }}>拨号账号与策略说明:</span>
-                          <div style={{ background: "#fff", border: "1px solid #fed7aa", padding: "6px 10px", borderRadius: 4, color: "#7c2d12" }}>
-                            {currentProjectVpn.accountNote || "运维组动态令牌统一口令认证"}
-                          </div>
-                        </div>
-                        <div style={{ gridColumn: "span 2" }}>
-                          <span style={{ color: "#64748b", display: "block" }}>路由可达专网网段:</span>
-                          <code style={{ fontSize: 12, background: "#fff", border: "1px solid #e2e8f0", padding: "4px 8px", borderRadius: 4, display: "block", color: "#334155" }}>
-                            {currentProjectVpn.vpnNetworkSegment || "192.141.20.0/23, 10.200.0.0/16"}
-                          </code>
-                        </div>
-                      </div>
-
-                      <div style={{ borderTop: "1px dashed #fdba74", paddingTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
-                        <span style={{ fontSize: 11, color: "#7c2d12", fontWeight: 600 }}>客户端下载指引:</span>
-                        <a 
-                          href="https://www.sangfor.com.cn/" 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          [📥 Windows 客户端]
-                        </a>
-                        <a 
-                          href="https://www.sangfor.com.cn/" 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          [📥 信创 Linux 客户端]
-                        </a>
-                        <a 
-                          href="https://www.sangfor.com.cn/" 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          style={{ fontSize: 11, color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          [📥 移动端 App]
-                        </a>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", background: "#f8fafc", borderRadius: 6 }}>
-                      该项目暂未配置专用 VPN 专网通道信息。
+                      ))}
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="cmdb-modal-footer">
+            <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end" }}>
               <button type="button" className="btn-secondary" onClick={() => setDetailAsset(null)}>关 闭</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= MODAL: ADD ASSET INTO PROJECT ================= */}
       {showAddModal && (
         <div className="cmdb-modal-mask">
           <form className="cmdb-modal" style={{ maxWidth: 740, width: "95%" }} onSubmit={handleAddSubmit}>
@@ -2750,12 +3512,50 @@ export default function HostManagement({
         </div>
       )}
 
-      {/* Excel 台账导入弹窗 */}
+      {/* Excel 台账导入弹窗 (支持 v351 五维全表 / 单 Sheet 智能导入) */}
       {showImportModal && (
         <ImportModal
           targetProjectName={currentProject ? currentProject.name : null}
-          existingAssets={allAssets}
+          activeDimension={activeDimension}
+          existingHardware={allAssets}
+          existingDatabases={databases}
+          existingMiddlewares={middlewares}
+          existingBackups={backups}
+          existingOpsRecords={opsRecords}
           onClose={() => setShowImportModal(false)}
+          onConfirmImportMulti={(res, strategy) => {
+            if (onBatchImportMultiDimension) {
+              onBatchImportMultiDimension(res, strategy, currentProject ? currentProject.name : null);
+            } else {
+              if (res.hardware.length > 0 && onBatchImportAssets) {
+                onBatchImportAssets(res.hardware, strategy, currentProject ? currentProject.name : null);
+              }
+              if (res.databases.length > 0 && onBatchImportDatabases) {
+                onBatchImportDatabases(res.databases, strategy, currentProject ? currentProject.name : null);
+              }
+              if (res.middlewares.length > 0 && onBatchImportMiddlewares) {
+                onBatchImportMiddlewares(res.middlewares, strategy, currentProject ? currentProject.name : null);
+              }
+              if (res.backups.length > 0 && onBatchImportBackups) {
+                onBatchImportBackups(res.backups, strategy, currentProject ? currentProject.name : null);
+              }
+              if (res.opsRecords.length > 0 && onBatchImportOpsRecords) {
+                onBatchImportOpsRecords(res.opsRecords, strategy, currentProject ? currentProject.name : null);
+              }
+            }
+
+            const strategyLabel = strategy === "upsert" ? "智能覆盖更新" : strategy === "skip" ? "仅新增(跳过重复)" : "全量替换";
+            const parts = [];
+            if (res.hardware.length > 0) parts.push(`硬件 ${res.hardware.length} 台`);
+            if (res.databases.length > 0) parts.push(`数据库 ${res.databases.length} 条`);
+            if (res.middlewares.length > 0) parts.push(`中间件 ${res.middlewares.length} 条`);
+            if (res.backups.length > 0) parts.push(`备份 ${res.backups.length} 条`);
+            if (res.opsRecords.length > 0) parts.push(`运维 ${res.opsRecords.length} 条`);
+
+            const summary = parts.length > 0 ? parts.join("、") : "0 条记录";
+            setToastNotice(`✓ 执行完成 (${strategyLabel})：共成功导入 ${summary}！`);
+            setTimeout(() => setToastNotice(null), 4000);
+          }}
           onConfirmImport={(imported, strategy) => {
             if (onBatchImportAssets) {
               onBatchImportAssets(imported, strategy, currentProject ? currentProject.name : null);
@@ -2767,7 +3567,791 @@ export default function HostManagement({
         />
       )}
 
-      {/* ================= MODAL: ADD PROJECT ================= */}
+            {/* ================= MODAL: 03-DATABASE ADD ================= */}
+      {showAddDbModal && (
+        <div className="cmdb-modal-mask">
+          <div className="cmdb-modal" style={{ maxWidth: 650, width: "95%" }}>
+            <div className="cmdb-modal-header" style={{ background: "#4338ca", color: "#fff", borderBottom: 0 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: "#fff" }}>🗄️ 录入数据库实例台账 (Sheet 03)</h3>
+              <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setShowAddDbModal(false)}>×</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const newRecord: any = {
+                id: `db-new-${Date.now()}`,
+                seq: (databases?.length || 0) + 1,
+                name: `${newDbDraft.dbSoftware}_${newDbDraft.port}`,
+                type: newDbDraft.dbSoftware,
+                version: newDbDraft.version,
+                port: Number(newDbDraft.port) || 3306,
+                status: "active",
+                businessId: `BIZ-DB-${Date.now().toString().slice(-4)}`,
+                hostIp: newDbDraft.privateIp,
+                privateIp: newDbDraft.privateIp,
+                vipEip: newDbDraft.vipEip,
+                arch: "x86_64",
+                projectName: newDbDraft.projectName || currentProject?.name || projects[0]?.name,
+                customerName: newDbDraft.customerName || currentProject?.customerName || projects[0]?.customerName,
+                env: newDbDraft.env,
+                cloudVendor: newDbDraft.cloudVendor,
+                regionName: newDbDraft.regionName,
+                dbCategory: newDbDraft.dbCategory,
+                dbSoftware: newDbDraft.dbSoftware,
+                instanceSid: newDbDraft.instanceSid,
+                dbName: newDbDraft.dbName,
+                deployMode: newDbDraft.deployMode,
+                clusterName: newDbDraft.clusterName,
+                remarks: newDbDraft.remarks
+              };
+              onAddDatabase?.(newRecord);
+              setShowAddDbModal(false);
+              setToastNotice(`✓ 成功登记数据库实例【${newRecord.instanceSid || newRecord.name}】！`);
+              setTimeout(() => setToastNotice(null), 3500);
+            }}>
+              <div className="cmdb-modal-body" style={{ maxHeight: "72vh", overflowY: "auto", padding: "16px 20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>所属项目 *</span>
+                    <select
+                      value={newDbDraft.projectName}
+                      onChange={e => {
+                        const p = projects.find(x => x.name === e.target.value);
+                        setNewDbDraft(prev => ({
+                          ...prev,
+                          projectName: e.target.value,
+                          customerName: p ? p.customerName : prev.customerName,
+                          env: p ? p.env : prev.env,
+                          cloudVendor: p ? p.cloudVendor : prev.cloudVendor,
+                          regionName: p ? p.regionName : prev.regionName
+                        }));
+                      }}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      {projects.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>客户单位</span>
+                    <input
+                      value={newDbDraft.customerName}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, customerName: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>数据库大类</span>
+                    <select
+                      value={newDbDraft.dbCategory}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, dbCategory: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    >
+                      <option value="关系型 (RDBMS / OLTP)">关系型 (RDBMS / OLTP)</option>
+                      <option value="分析型 (OLAP / 列式)">分析型 (OLAP / 列式)</option>
+                      <option value="键值型 (Key-Value / Cache)">键值型 (Key-Value / Cache)</option>
+                      <option value="文档型 (Document)">文档型 (Document)</option>
+                      <option value="时序型 (Time-Series)">时序型 (Time-Series)</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>数据库软件 *</span>
+                    <select
+                      value={newDbDraft.dbSoftware}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, dbSoftware: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      <option value="达梦数据库 (DM)">达梦数据库 (DM)</option>
+                      <option value="人大金仓 (KingbaseES)">人大金仓 (KingbaseES)</option>
+                      <option value="Oracle 数据库">Oracle 数据库</option>
+                      <option value="TiDB 分布式数据库">TiDB 分布式数据库</option>
+                      <option value="OceanBase 分布式数据库">OceanBase 分布式数据库</option>
+                      <option value="MySQL">MySQL</option>
+                      <option value="MariaDB">MariaDB</option>
+                      <option value="PostgreSQL">PostgreSQL</option>
+                      <option value="Redis">Redis</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>软件版本</span>
+                    <input
+                      value={newDbDraft.version}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, version: e.target.value }))}
+                      placeholder="例: V8.4 / 11.2.0.4"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>服务端口 *</span>
+                    <input
+                      type="number"
+                      value={newDbDraft.port}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, port: Number(e.target.value) }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>私有业务 IP *</span>
+                    <input
+                      value={newDbDraft.privateIp}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, privateIp: e.target.value }))}
+                      placeholder="例: 192.125.31.250"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>VIP / EIP</span>
+                    <input
+                      value={newDbDraft.vipEip}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, vipEip: e.target.value }))}
+                      placeholder="例: 192.125.31.100"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>实例名 / SID</span>
+                    <input
+                      value={newDbDraft.instanceSid}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, instanceSid: e.target.value }))}
+                      placeholder="例: DMSERVER / orcl1"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>业务库名 (DB Name)</span>
+                    <input
+                      value={newDbDraft.dbName}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, dbName: e.target.value }))}
+                      placeholder="例: biz_app_db"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>部署架构模式</span>
+                    <select
+                      value={newDbDraft.deployMode}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, deployMode: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    >
+                      <option value="单机">单机</option>
+                      <option value="主从读写分离">主从读写分离</option>
+                      <option value="集群 (RAC/主备共享存储)">集群 (RAC/主备共享存储)</option>
+                      <option value="分布式原生多活">分布式原生多活</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>集群/组名</span>
+                    <input
+                      value={newDbDraft.clusterName}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, clusterName: e.target.value }))}
+                      placeholder="例: DM_RAC_PROD"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label style={{ gridColumn: "span 2" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备注说明</span>
+                    <textarea
+                      value={newDbDraft.remarks}
+                      onChange={e => setNewDbDraft(prev => ({ ...prev, remarks: e.target.value }))}
+                      rows={2}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowAddDbModal(false)}>取 消</button>
+                <button type="submit" className="btn-primary" style={{ background: "#4338ca", border: "none" }}>确 认 录 入</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: 04-MIDDLEWARE ADD ================= */}
+      {showAddMwModal && (
+        <div className="cmdb-modal-mask">
+          <div className="cmdb-modal" style={{ maxWidth: 650, width: "95%" }}>
+            <div className="cmdb-modal-header" style={{ background: "#d97706", color: "#fff", borderBottom: 0 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: "#fff" }}>⚙️ 录入中间件服务档案 (Sheet 04)</h3>
+              <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setShowAddMwModal(false)}>×</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const newRecord: any = {
+                id: `mw-new-${Date.now()}`,
+                seq: (middlewares?.length || 0) + 1,
+                name: `${newMwDraft.mwSoftware}_${newMwDraft.port}`,
+                mwType: newMwDraft.mwType,
+                mwSoftware: newMwDraft.mwSoftware,
+                version: newMwDraft.version,
+                port: newMwDraft.port,
+                role: newMwDraft.role,
+                runtime: newMwDraft.runtime,
+                status: "running",
+                privateIp: newMwDraft.privateIp,
+                assetIp: newMwDraft.privateIp,
+                projectName: newMwDraft.projectName || currentProject?.name || projects[0]?.name,
+                customerName: newMwDraft.customerName || currentProject?.customerName || projects[0]?.customerName,
+                env: newMwDraft.env,
+                cloudVendor: newMwDraft.cloudVendor,
+                regionName: newMwDraft.regionName,
+                remarks: newMwDraft.remarks
+              };
+              onAddMiddleware?.(newRecord);
+              setShowAddMwModal(false);
+              setToastNotice(`✓ 成功登记中间件服务【${newRecord.mwSoftware}】！`);
+              setTimeout(() => setToastNotice(null), 3500);
+            }}>
+              <div className="cmdb-modal-body" style={{ maxHeight: "72vh", overflowY: "auto", padding: "16px 20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>所属项目 *</span>
+                    <select
+                      value={newMwDraft.projectName}
+                      onChange={e => {
+                        const p = projects.find(x => x.name === e.target.value);
+                        setNewMwDraft(prev => ({
+                          ...prev,
+                          projectName: e.target.value,
+                          customerName: p ? p.customerName : prev.customerName,
+                          env: p ? p.env : prev.env,
+                          cloudVendor: p ? p.cloudVendor : prev.cloudVendor,
+                          regionName: p ? p.regionName : prev.regionName
+                        }));
+                      }}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      {projects.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>客户单位</span>
+                    <input
+                      value={newMwDraft.customerName}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, customerName: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>中间件类型 *</span>
+                    <select
+                      value={newMwDraft.mwType}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, mwType: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      <option value="应用服务器/Java Web 容器">应用服务器/Java Web 容器</option>
+                      <option value="Web服务器/反向代理">Web服务器/反向代理</option>
+                      <option value="消息队列 (MQ)">消息队列 (MQ)</option>
+                      <option value="分布式缓存">分布式缓存</option>
+                      <option value="注册中心/配置中心">注册中心/配置中心</option>
+                      <option value="搜索引擎">搜索引擎</option>
+                      <option value="容器运行时/编排">容器运行时/编排</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>中间件软件名称 *</span>
+                    <select
+                      value={newMwDraft.mwSoftware}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, mwSoftware: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      <option value="TongWeb (东方通)">TongWeb (东方通)</option>
+                      <option value="BES (宝兰德)">BES (宝兰德)</option>
+                      <option value="Tomcat">Tomcat</option>
+                      <option value="Nginx">Nginx</option>
+                      <option value="Kafka">Kafka</option>
+                      <option value="RocketMQ">RocketMQ</option>
+                      <option value="RabbitMQ">RabbitMQ</option>
+                      <option value="Redis">Redis</option>
+                      <option value="Nacos">Nacos</option>
+                      <option value="Zookeeper">Zookeeper</option>
+                      <option value="Elasticsearch">Elasticsearch</option>
+                      <option value="Docker">Docker</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>软件版本</span>
+                    <input
+                      value={newMwDraft.version}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, version: e.target.value }))}
+                      placeholder="例: 7.0.E / 1.20.1"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>服务端口</span>
+                    <input
+                      value={newMwDraft.port}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, port: e.target.value }))}
+                      placeholder="例: 8080 / 9092"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>私有业务 IP *</span>
+                    <input
+                      value={newMwDraft.privateIp}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, privateIp: e.target.value }))}
+                      placeholder="例: 192.125.31.250"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                    </input>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>运行时依赖 (Runtime)</span>
+                    <input
+                      value={newMwDraft.runtime}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, runtime: e.target.value }))}
+                      placeholder="例: OpenJDK 11 / Python 3.9"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>节点角色</span>
+                    <select
+                      value={newMwDraft.role}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, role: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    >
+                      <option value="Server">Server (独立服务)</option>
+                      <option value="Master/Broker">Master/Broker (主控)</option>
+                      <option value="Worker/Node">Worker/Node (工作节点)</option>
+                      <option value="Agent">Agent (客户端探针)</option>
+                    </select>
+                  </label>
+
+                  <label style={{ gridColumn: "span 2" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备注说明</span>
+                    <textarea
+                      value={newMwDraft.remarks}
+                      onChange={e => setNewMwDraft(prev => ({ ...prev, remarks: e.target.value }))}
+                      rows={2}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowAddMwModal(false)}>取 消</button>
+                <button type="submit" className="btn-primary" style={{ background: "#d97706", border: "none" }}>确 认 录 入</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: 05-BACKUP ADD ================= */}
+      {showAddBkModal && (
+        <div className="cmdb-modal-mask">
+          <div className="cmdb-modal" style={{ maxWidth: 650, width: "95%" }}>
+            <div className="cmdb-modal-header" style={{ background: "#059669", color: "#fff", borderBottom: 0 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: "#fff" }}>💾 录入数据备份策略 (Sheet 05)</h3>
+              <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setShowAddBkModal(false)}>×</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const newRecord: any = {
+                id: `bk-new-${Date.now()}`,
+                seq: (backups?.length || 0) + 1,
+                projectName: newBkDraft.projectName || currentProject?.name || projects[0]?.name,
+                customerName: newBkDraft.customerName || currentProject?.customerName || projects[0]?.customerName,
+                env: newBkDraft.env,
+                cloudVendor: newBkDraft.cloudVendor,
+                regionName: newBkDraft.regionName,
+                privateIp: newBkDraft.privateIp,
+                backupType: newBkDraft.backupType,
+                backupMethod: newBkDraft.backupMethod,
+                backupPolicy: newBkDraft.backupPolicy,
+                storageLocation: newBkDraft.storageLocation,
+                retentionDays: Number(newBkDraft.retentionDays) || 30,
+                lastBackupTime: "2026-09-21 03:00:00",
+                status: "normal",
+                remarks: newBkDraft.remarks
+              };
+              onAddBackup?.(newRecord);
+              setShowAddBkModal(false);
+              setToastNotice(`✓ 成功登记备份策略【${newRecord.backupType} - ${newRecord.backupPolicy}】！`);
+              setTimeout(() => setToastNotice(null), 3500);
+            }}>
+              <div className="cmdb-modal-body" style={{ maxHeight: "72vh", overflowY: "auto", padding: "16px 20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>所属项目 *</span>
+                    <select
+                      value={newBkDraft.projectName}
+                      onChange={e => {
+                        const p = projects.find(x => x.name === e.target.value);
+                        setNewBkDraft(prev => ({
+                          ...prev,
+                          projectName: e.target.value,
+                          customerName: p ? p.customerName : prev.customerName,
+                          env: p ? p.env : prev.env,
+                          cloudVendor: p ? p.cloudVendor : prev.cloudVendor,
+                          regionName: p ? p.regionName : prev.regionName
+                        }));
+                      }}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      {projects.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>客户单位</span>
+                    <input
+                      value={newBkDraft.customerName}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, customerName: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>私有业务 IP *</span>
+                    <input
+                      value={newBkDraft.privateIp}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, privateIp: e.target.value }))}
+                      placeholder="例: 192.125.31.250"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备份类型 *</span>
+                    <select
+                      value={newBkDraft.backupType}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, backupType: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      <option value="数据库">数据库</option>
+                      <option value="操作系统/系统盘">操作系统/系统盘</option>
+                      <option value="业务文件/数据盘">业务文件/数据盘</option>
+                      <option value="对象存储">对象存储</option>
+                      <option value="中间件配置">中间件配置</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备份方式 *</span>
+                    <select
+                      value={newBkDraft.backupMethod}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, backupMethod: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      <option value="物理备份">物理备份</option>
+                      <option value="逻辑备份">逻辑备份</option>
+                      <option value="云快照备份">云快照备份</option>
+                      <option value="归档备份">归档备份</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备份策略周期 *</span>
+                    <select
+                      value={newBkDraft.backupPolicy}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, backupPolicy: e.target.value }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      <option value="物理+归档">物理+归档</option>
+                      <option value="每日增量+周末全量">每日增量+周末全量</option>
+                      <option value="每日定时快照">每日定时快照</option>
+                      <option value="异地归档备份">异地归档备份</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>存储位置介质 *</span>
+                    <input
+                      value={newBkDraft.storageLocation}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, storageLocation: e.target.value }))}
+                      placeholder="例: 政务专区专用NAS / 对象存储桶"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>数据保留周期 (天) *</span>
+                    <input
+                      type="number"
+                      value={newBkDraft.retentionDays}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, retentionDays: Number(e.target.value) }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label style={{ gridColumn: "span 2" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备注说明</span>
+                    <textarea
+                      value={newBkDraft.remarks}
+                      onChange={e => setNewBkDraft(prev => ({ ...prev, remarks: e.target.value }))}
+                      rows={2}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowAddBkModal(false)}>取 消</button>
+                <button type="submit" className="btn-primary" style={{ background: "#059669", border: "none" }}>确 认 录 入</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: 06-OPS RECORD ADD ================= */}
+      {showAddOpsModal && (
+        <div className="cmdb-modal-mask">
+          <div className="cmdb-modal" style={{ maxWidth: 700, width: "95%" }}>
+            <div className="cmdb-modal-header" style={{ background: "#7c3aed", color: "#fff", borderBottom: 0 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: "#fff" }}>🛡️ 录入运维保障规范 (Sheet 06)</h3>
+              <button type="button" className="cmdb-modal-close" style={{ color: "#fff" }} onClick={() => setShowAddOpsModal(false)}>×</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const newRecord: any = {
+                id: `ops-new-${Date.now()}`,
+                seq: (opsRecords?.length || 0) + 1,
+                projectName: newOpsDraft.projectName || currentProject?.name || projects[0]?.name,
+                customerName: newOpsDraft.customerName || currentProject?.customerName || projects[0]?.customerName,
+                env: newOpsDraft.env,
+                cloudVendor: newOpsDraft.cloudVendor,
+                regionName: newOpsDraft.regionName,
+                privateIp: newOpsDraft.privateIp,
+                opsVendor: newOpsDraft.opsVendor,
+                vpnAddress: newOpsDraft.vpnAddress,
+                vpnAccount: newOpsDraft.vpnAccount,
+                bastionAddress: newOpsDraft.bastionAddress,
+                bastionAccount: newOpsDraft.bastionAccount,
+                serverAccessAddress: newOpsDraft.serverAccessAddress || `ssh root@${newOpsDraft.privateIp}`,
+                monitoringCoverage: newOpsDraft.monitoringCoverage,
+                inspectionCycle: newOpsDraft.inspectionCycle,
+                changeWindow: newOpsDraft.changeWindow,
+                networkZone: newOpsDraft.networkZone,
+                exposureSurface: newOpsDraft.exposureSurface,
+                remarks: newOpsDraft.remarks
+              };
+              onAddOpsRecord?.(newRecord);
+              setShowAddOpsModal(false);
+              setToastNotice(`✓ 成功登记运维保障记录【${newRecord.opsVendor}】！`);
+              setTimeout(() => setToastNotice(null), 3500);
+            }}>
+              <div className="cmdb-modal-body" style={{ maxHeight: "72vh", overflowY: "auto", padding: "16px 20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>所属项目 *</span>
+                    <select
+                      value={newOpsDraft.projectName}
+                      onChange={e => {
+                        const p = projects.find(x => x.name === e.target.value);
+                        setNewOpsDraft(prev => ({
+                          ...prev,
+                          projectName: e.target.value,
+                          customerName: p ? p.customerName : prev.customerName,
+                          env: p ? p.env : prev.env,
+                          cloudVendor: p ? p.cloudVendor : prev.cloudVendor,
+                          regionName: p ? p.regionName : prev.regionName
+                        }));
+                      }}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    >
+                      {projects.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>运维保障厂商 *</span>
+                    <input
+                      value={newOpsDraft.opsVendor}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, opsVendor: e.target.value }))}
+                      placeholder="例: 北京北控伟仕软件有限公司"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>私有业务 IP *</span>
+                    <input
+                      value={newOpsDraft.privateIp}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, privateIp: e.target.value }))}
+                      placeholder="例: 192.125.31.250"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>VPN接入地址</span>
+                    <input
+                      value={newOpsDraft.vpnAddress}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, vpnAddress: e.target.value }))}
+                      placeholder="例: 114.255.48.18:443"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>VPN账号</span>
+                    <input
+                      value={newOpsDraft.vpnAccount}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, vpnAccount: e.target.value }))}
+                      placeholder="例: vpn_ops_user"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>堡垒机(JumpServer)地址</span>
+                    <input
+                      value={newOpsDraft.bastionAddress}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, bastionAddress: e.target.value }))}
+                      placeholder="例: https://jumpserver.bj-gov.cn:443"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>堡垒机账号</span>
+                    <input
+                      value={newOpsDraft.bastionAccount}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, bastionAccount: e.target.value }))}
+                      placeholder="例: ops_admin"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>服务器访问命令</span>
+                    <input
+                      value={newOpsDraft.serverAccessAddress}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, serverAccessAddress: e.target.value }))}
+                      placeholder="例: ssh root@192.125.31.250 -p 22"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>监控覆盖</span>
+                    <select
+                      value={newOpsDraft.monitoringCoverage}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, monitoringCoverage: e.target.value as any }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    >
+                      <option value="是">是 (全面接入 Prometheus/Zabbix)</option>
+                      <option value="部分">部分 (仅主机基础监控)</option>
+                      <option value="否">否 (未纳入监控)</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>巡检周期</span>
+                    <select
+                      value={newOpsDraft.inspectionCycle}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, inspectionCycle: e.target.value as any }))}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    >
+                      <option value="每日">每日</option>
+                      <option value="每周">每周</option>
+                      <option value="每月">每月</option>
+                      <option value="每季">每季</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>变更窗口</span>
+                    <input
+                      value={newOpsDraft.changeWindow}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, changeWindow: e.target.value }))}
+                      placeholder="例: 周五晚22:00后 / 工作日夜间"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>网络分区与暴露面</span>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input
+                        value={newOpsDraft.networkZone}
+                        onChange={e => setNewOpsDraft(prev => ({ ...prev, networkZone: e.target.value }))}
+                        placeholder="网络分区(业务网)"
+                        style={{ flex: 1, padding: "6px 8px", fontSize: 12 }}
+                      />
+                      <select
+                        value={newOpsDraft.exposureSurface}
+                        onChange={e => setNewOpsDraft(prev => ({ ...prev, exposureSurface: e.target.value }))}
+                        style={{ width: 110, padding: "6px 8px", fontSize: 12 }}
+                      >
+                        <option value="业务内网">业务内网</option>
+                        <option value="内部大网">内部大网</option>
+                        <option value="公网暴露">公网暴露</option>
+                      </select>
+                    </div>
+                  </label>
+
+                  <label style={{ gridColumn: "span 2" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>备注说明</span>
+                    <textarea
+                      value={newOpsDraft.remarks}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, remarks: e.target.value }))}
+                      rows={2}
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="cmdb-modal-footer" style={{ borderTop: "1px solid #e2e8f0", padding: "12px 20px", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowAddOpsModal(false)}>取 消</button>
+                <button type="submit" className="btn-primary" style={{ background: "#7c3aed", border: "none" }}>确 认 录 入</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+{/* ================= MODAL: ADD PROJECT ================= */}
       {showAddProjectModal && (
         <div className="cmdb-modal-mask">
           <form className="cmdb-modal" style={{ maxWidth: 640, width: "95%" }} onSubmit={handleAddProjectSubmit}>

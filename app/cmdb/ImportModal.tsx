@@ -1,1010 +1,985 @@
 "use client";
-import React, { useState, useRef, useMemo } from "react";
-import { VmHost } from "../cmdbData";
-import { parseExcelToAssets, getAssetKey, diffAssets, AssetDiffResult } from "./excelExport";
+import React, { useState, useRef, useMemo, useEffect } from "react";
+import { VmHost, DatabaseAsset, MiddlewareAsset, BackupAsset, OpsAsset } from "../cmdbData";
+import {
+  parseExcelWorkbook,
+  ParsedWorkbookResult,
+  getAssetKey,
+  getDatabaseKey,
+  getMiddlewareKey,
+  getBackupKey,
+  getOpsKey,
+  diffAssets,
+  diffDatabases,
+  diffMiddlewares,
+  diffBackups,
+  diffOps,
+  AssetDiffResult
+} from "./excelExport";
 
 export type ImportStrategy = "upsert" | "skip" | "replace";
+export type DimensionType = "hardware" | "database" | "middleware" | "backup" | "ops";
 
-export interface ImportItemAnalysis {
+export interface ItemAnalysis<T> {
   index: number;
-  device: VmHost & { isImported?: boolean };
+  item: T;
   key: string;
   status: "pure_new" | "db_update" | "db_identical" | "file_duplicate";
   isDuplicate: boolean;
   duplicateReason?: string;
-  existing?: VmHost;
+  existing?: T;
   diffResult?: AssetDiffResult;
 }
 
 interface ImportModalProps {
   targetProjectName?: string | null;
-  existingAssets?: (VmHost | any)[];
+  activeDimension?: DimensionType;
+  existingHardware?: (VmHost | any)[];
+  existingDatabases?: DatabaseAsset[];
+  existingMiddlewares?: MiddlewareAsset[];
+  existingBackups?: BackupAsset[];
+  existingOpsRecords?: OpsAsset[];
+  existingAssets?: (VmHost | any)[]; // legacy compatibility
   onClose: () => void;
-  onConfirmImport: (
+  onConfirmImport?: (
     importedAssets: (VmHost & { isImported?: boolean })[],
+    strategy: ImportStrategy
+  ) => void;
+  onConfirmImportMulti?: (
+    result: {
+      hardware: (VmHost & { isImported?: boolean })[];
+      databases: (DatabaseAsset & { isImported?: boolean })[];
+      middlewares: (MiddlewareAsset & { isImported?: boolean })[];
+      backups: (BackupAsset & { isImported?: boolean })[];
+      opsRecords: (OpsAsset & { isImported?: boolean })[];
+    },
     strategy: ImportStrategy
   ) => void;
 }
 
 export default function ImportModal({
   targetProjectName,
+  activeDimension = "hardware",
+  existingHardware = [],
+  existingDatabases = [],
+  existingMiddlewares = [],
+  existingBackups = [],
+  existingOpsRecords = [],
   existingAssets = [],
   onClose,
-  onConfirmImport
+  onConfirmImport,
+  onConfirmImportMulti
 }: ImportModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [fileName, setFileName] = useState("");
-  const [sheetName, setSheetName] = useState("");
-  const [parsedList, setParsedList] = useState<(VmHost & { isImported?: boolean })[]>([]);
-  
-  // Strategy: default to upsert (smart update, zero duplicate)
+
+  // Workbook result
+  const [workbookResult, setWorkbookResult] = useState<ParsedWorkbookResult | null>(null);
+
+  // Active viewing tab inside the modal
+  const [currentTab, setCurrentTab] = useState<DimensionType>(activeDimension);
+
+  // Strategy: default to upsert
   const [strategy, setStrategy] = useState<ImportStrategy>("upsert");
-  
+
   // Filter tab for preview: all / duplicate / pure_new / db_update / selected
   const [previewFilter, setPreviewFilter] = useState<"all" | "duplicate" | "pure_new" | "db_update" | "selected">("all");
-  
+
   // Search keyword inside modal
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Manually selected item indexes (Set of indexes corresponding to parsedList)
-  const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
+  // Selected item indexes per dimension
+  const [selectedHw, setSelectedHw] = useState<Set<number>>(new Set());
+  const [selectedDb, setSelectedDb] = useState<Set<number>>(new Set());
+  const [selectedMw, setSelectedMw] = useState<Set<number>>(new Set());
+  const [selectedBk, setSelectedBk] = useState<Set<number>>(new Set());
+  const [selectedOps, setSelectedOps] = useState<Set<number>>(new Set());
 
-  // Build existing map for quick diffing and duplicate check
-  const existingMap = useMemo(() => {
+  // Merge legacy existingAssets with existingHardware
+  const hwPool = existingHardware.length > 0 ? existingHardware : existingAssets;
+
+  // Build existing maps
+  const existingHwMap = useMemo(() => {
     const map = new Map<string, VmHost>();
-    for (const item of existingAssets) {
+    for (const item of hwPool) {
       const k = getAssetKey(item);
-      if (!map.has(k)) {
-        map.set(k, item);
-      }
+      if (!map.has(k)) map.set(k, item);
     }
     return map;
-  }, [existingAssets]);
+  }, [hwPool]);
 
-  // Analyze parsed items vs existing DB assets and intra-file occurrences
-  const analysisList: ImportItemAnalysis[] = useMemo(() => {
-    if (parsedList.length === 0) return [];
+  const existingDbMap = useMemo(() => {
+    const map = new Map<string, DatabaseAsset>();
+    for (const item of existingDatabases) {
+      const k = getDatabaseKey(item);
+      if (!map.has(k)) map.set(k, item);
+    }
+    return map;
+  }, [existingDatabases]);
 
-    // Step 1: count key frequencies within current uploaded file
-    const fileKeyCount = new Map<string, number>();
-    const fileKeyFirstIndex = new Map<string, number>();
-    parsedList.forEach((item, idx) => {
-      const k = getAssetKey(item);
-      fileKeyCount.set(k, (fileKeyCount.get(k) || 0) + 1);
-      if (!fileKeyFirstIndex.has(k)) {
-        fileKeyFirstIndex.set(k, idx);
-      }
+  const existingMwMap = useMemo(() => {
+    const map = new Map<string, MiddlewareAsset>();
+    for (const item of existingMiddlewares) {
+      const k = getMiddlewareKey(item);
+      if (!map.has(k)) map.set(k, item);
+    }
+    return map;
+  }, [existingMiddlewares]);
+
+  const existingBkMap = useMemo(() => {
+    const map = new Map<string, BackupAsset>();
+    for (const item of existingBackups) {
+      const k = getBackupKey(item);
+      if (!map.has(k)) map.set(k, item);
+    }
+    return map;
+  }, [existingBackups]);
+
+  const existingOpsMap = useMemo(() => {
+    const map = new Map<string, OpsAsset>();
+    for (const item of existingOpsRecords) {
+      const k = getOpsKey(item);
+      if (!map.has(k)) map.set(k, item);
+    }
+    return map;
+  }, [existingOpsRecords]);
+
+  // Generic item analyzer
+  function analyzeItems<T>(
+    items: T[],
+    getKey: (it: T) => string,
+    existingMap: Map<string, T>,
+    diffFn: (existing: Partial<T>, incoming: Partial<T>) => AssetDiffResult,
+    getDisplayName: (it: T) => string
+  ): ItemAnalysis<T>[] {
+    if (!items || items.length === 0) return [];
+    const countMap = new Map<string, number>();
+    const firstIdxMap = new Map<string, number>();
+
+    items.forEach((it, idx) => {
+      const k = getKey(it);
+      countMap.set(k, (countMap.get(k) || 0) + 1);
+      if (!firstIdxMap.has(k)) firstIdxMap.set(k, idx);
     });
 
-    // Step 2: analyze each parsed row
-    return parsedList.map((item, idx) => {
-      const key = getAssetKey(item);
-      const isFileDup = (fileKeyCount.get(key) || 0) > 1;
-      const isFileFollower = isFileDup && fileKeyFirstIndex.get(key) !== idx;
+    return items.map((it, idx) => {
+      const key = getKey(it);
+      const isFileDup = (countMap.get(key) || 0) > 1;
+      const isFollower = isFileDup && firstIdxMap.get(key) !== idx;
       const existing = existingMap.get(key);
 
-      // Case 1: Intra-file duplicate (another row in this file has the exact same key)
-      if (isFileFollower) {
-        const firstRow = (fileKeyFirstIndex.get(key) || 0) + 1;
+      if (isFollower) {
         return {
           index: idx,
-          device: item,
+          item: it,
           key,
           status: "file_duplicate",
           isDuplicate: true,
-          duplicateReason: `⚠️ 与文件内第 ${firstRow} 行重复（相同业务IP/标识）`,
+          duplicateReason: `⚠️ 与文件内第 ${(firstIdxMap.get(key) || 0) + 1} 行重复`,
           existing
         };
       }
 
-      // Case 2: Existing asset in database
       if (existing) {
-        const diff = diffAssets(existing, item);
+        const diff = diffFn(existing, it);
         if (diff.hasChanged) {
           return {
             index: idx,
-            device: item,
+            item: it,
             key,
             status: "db_update",
             isDuplicate: true,
-            duplicateReason: `🟠 台账中已存在（${existing.projectName || "已有资产"} · ${existing.privateIp || existing.name}），有 ${diff.diffs.length} 处配置变更`,
+            duplicateReason: `🟠 台账中已存在（${getDisplayName(existing)}），有 ${diff.diffs.length} 处配置变更`,
             existing,
             diffResult: diff
           };
         } else {
           return {
             index: idx,
-            device: item,
+            item: it,
             key,
             status: "db_identical",
             isDuplicate: true,
-            duplicateReason: `⚠️ 台账中已存在此设备且配置相同（${existing.projectName || "已有资产"} · ${existing.privateIp || existing.name}）`,
+            duplicateReason: `⚠️ 台账中已存在完全相同记录（${getDisplayName(existing)}）`,
             existing,
             diffResult: diff
           };
         }
       }
 
-      // Case 3: Pure new asset
       return {
         index: idx,
-        device: item,
+        item: it,
         key,
         status: "pure_new",
-        isDuplicate: isFileDup, // first of file dup is flagged if repeats later
+        isDuplicate: isFileDup,
         duplicateReason: isFileDup ? "⚠️ 文件内有多条此记录（此行为首条）" : undefined
       };
     });
-  }, [parsedList, existingMap]);
+  }
 
-  // Statistics
-  const counts = useMemo(() => {
-    let pureNewCount = 0;
-    let dbUpdateCount = 0;
-    let dbIdenticalCount = 0;
-    let fileDuplicateCount = 0;
-    let duplicateCount = 0;
+  // Analyzed lists for each dimension
+  const hwAnalysis = useMemo(() => {
+    return analyzeItems(
+      workbookResult?.hardware || [],
+      getAssetKey,
+      existingHwMap,
+      diffAssets,
+      d => `${(d as any).projectName || ""} · ${(d as any).privateIp || (d as any).name}`
+    );
+  }, [workbookResult, existingHwMap]);
 
-    for (const a of analysisList) {
-      if (a.status === "pure_new") pureNewCount++;
-      else if (a.status === "db_update") {
-        dbUpdateCount++;
-        duplicateCount++;
-      } else if (a.status === "db_identical") {
-        dbIdenticalCount++;
-        duplicateCount++;
-      } else if (a.status === "file_duplicate") {
-        fileDuplicateCount++;
-        duplicateCount++;
-      }
-    }
+  const dbAnalysis = useMemo(() => {
+    return analyzeItems(
+      workbookResult?.databases || [],
+      getDatabaseKey,
+      existingDbMap,
+      diffDatabases,
+      d => `${d.projectName || ""} · ${d.dbSoftware} (${d.privateIp || d.hostIp})`
+    );
+  }, [workbookResult, existingDbMap]);
 
-    return {
-      pureNewCount,
-      dbUpdateCount,
-      dbIdenticalCount,
-      fileDuplicateCount,
-      duplicateCount
-    };
-  }, [analysisList]);
+  const mwAnalysis = useMemo(() => {
+    return analyzeItems(
+      workbookResult?.middlewares || [],
+      getMiddlewareKey,
+      existingMwMap,
+      diffMiddlewares,
+      m => `${m.projectName || ""} · ${m.mwSoftware || m.name} (${m.privateIp})`
+    );
+  }, [workbookResult, existingMwMap]);
 
-  // Filtered preview list
+  const bkAnalysis = useMemo(() => {
+    return analyzeItems(
+      workbookResult?.backups || [],
+      getBackupKey,
+      existingBkMap,
+      diffBackups,
+      b => `${b.projectName || ""} · ${b.backupType || "备份"} (${b.privateIp})`
+    );
+  }, [workbookResult, existingBkMap]);
+
+  const opsAnalysis = useMemo(() => {
+    return analyzeItems(
+      workbookResult?.opsRecords || [],
+      getOpsKey,
+      existingOpsMap,
+      diffOps,
+      o => `${o.projectName || ""} · ${o.opsVendor} (${o.privateIp})`
+    );
+  }, [workbookResult, existingOpsMap]);
+
+  // Current active analysis and selection set
+  const currentAnalysis = useMemo(() => {
+    if (currentTab === "hardware") return hwAnalysis;
+    if (currentTab === "database") return dbAnalysis;
+    if (currentTab === "middleware") return mwAnalysis;
+    if (currentTab === "backup") return bkAnalysis;
+    return opsAnalysis;
+  }, [currentTab, hwAnalysis, dbAnalysis, mwAnalysis, bkAnalysis, opsAnalysis]);
+
+  const currentSelection = useMemo(() => {
+    if (currentTab === "hardware") return selectedHw;
+    if (currentTab === "database") return selectedDb;
+    if (currentTab === "middleware") return selectedMw;
+    if (currentTab === "backup") return selectedBk;
+    return selectedOps;
+  }, [currentTab, selectedHw, selectedDb, selectedMw, selectedBk, selectedOps]);
+
+  function setCurrentSelection(fn: (prev: Set<number>) => Set<number>) {
+    if (currentTab === "hardware") setSelectedHw(fn);
+    else if (currentTab === "database") setSelectedDb(fn);
+    else if (currentTab === "middleware") setSelectedMw(fn);
+    else if (currentTab === "backup") setSelectedBk(fn);
+    else setSelectedOps(fn);
+  }
+
+  // Filtered rows for active tab
   const filteredAnalysis = useMemo(() => {
-    let list = analysisList;
+    return currentAnalysis.filter(item => {
+      if (previewFilter === "duplicate" && !item.isDuplicate) return false;
+      if (previewFilter === "pure_new" && item.status !== "pure_new") return false;
+      if (previewFilter === "db_update" && item.status !== "db_update") return false;
+      if (previewFilter === "selected" && !currentSelection.has(item.index)) return false;
 
-    // Filter tab
-    if (previewFilter === "duplicate") {
-      list = list.filter(a => a.isDuplicate);
-    } else if (previewFilter === "pure_new") {
-      list = list.filter(a => a.status === "pure_new");
-    } else if (previewFilter === "db_update") {
-      list = list.filter(a => a.status === "db_update");
-    } else if (previewFilter === "selected") {
-      list = list.filter(a => selectedIndexes.has(a.index));
-    }
-
-    // Search query filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(a => {
-        const d = a.device;
-        const name = (d.name || "").toLowerCase();
-        const ip = (d.privateIp || d.ip || "").toLowerCase();
-        const proj = (d.projectName || "").toLowerCase();
-        const reason = (a.duplicateReason || "").toLowerCase();
-        return name.includes(q) || ip.includes(q) || proj.includes(q) || reason.includes(q);
-      });
-    }
-
-    return list;
-  }, [analysisList, previewFilter, searchQuery, selectedIndexes]);
-
-  // Count how many of currently selected items are duplicates
-  const selectedDuplicateCount = useMemo(() => {
-    let count = 0;
-    for (const a of analysisList) {
-      if (selectedIndexes.has(a.index) && a.isDuplicate) {
-        count++;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const rawObj = JSON.stringify(item.item).toLowerCase();
+        const reason = (item.duplicateReason || "").toLowerCase();
+        if (!rawObj.includes(q) && !reason.includes(q)) return false;
       }
-    }
-    return count;
-  }, [analysisList, selectedIndexes]);
+      return true;
+    });
+  }, [currentAnalysis, previewFilter, currentSelection, searchQuery]);
 
-  async function handleFile(file: File) {
-    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
-      setErrorMsg("请上传 Excel 文件格式（.xlsx 或 .xls）");
+  // Handle file drop/upload
+  async function handleFileProcess(file: File) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      setErrorMsg("只支持上传 Excel 格式文件（.xlsx 或 .xls）");
       return;
     }
-
-    setLoading(true);
     setErrorMsg("");
+    setLoading(true);
     setFileName(file.name);
 
     try {
-      const res = await parseExcelToAssets(file);
-      if (res.devices.length === 0) {
-        setErrorMsg("文件中未解析到有效的设备数据，请检查工作表中是否包含「设备名称」或「私有IP」列。");
-        setParsedList([]);
-        setSelectedIndexes(new Set());
+      const res = await parseExcelWorkbook(file);
+      if (res.totalRecords === 0) {
+        throw new Error(
+          "未能从该 Excel 中解析出有效的台账数据。请确保上传包含《02-硬件设备》、《03-数据库》、《04-中间件》、《05-备份》或《06-运维》规范表头的文件。"
+        );
+      }
+
+      setWorkbookResult(res);
+
+      // Auto select all valid records (by default, pure_new and db_update are selected, intra-file duplicates are skipped)
+      const hwSel = new Set<number>();
+      res.hardware.forEach((_, idx) => hwSel.add(idx));
+      setSelectedHw(hwSel);
+
+      const dbSel = new Set<number>();
+      res.databases.forEach((_, idx) => dbSel.add(idx));
+      setSelectedDb(dbSel);
+
+      const mwSel = new Set<number>();
+      res.middlewares.forEach((_, idx) => mwSel.add(idx));
+      setSelectedMw(mwSel);
+
+      const bkSel = new Set<number>();
+      res.backups.forEach((_, idx) => bkSel.add(idx));
+      setSelectedBk(bkSel);
+
+      const opsSel = new Set<number>();
+      res.opsRecords.forEach((_, idx) => opsSel.add(idx));
+      setSelectedOps(opsSel);
+
+      // Auto switch to matching tab or first populated tab
+      const tabCounts: Record<DimensionType, number> = {
+        hardware: res.hardware.length,
+        database: res.databases.length,
+        middleware: res.middlewares.length,
+        backup: res.backups.length,
+        ops: res.opsRecords.length
+      };
+
+      if (tabCounts[activeDimension] > 0) {
+        setCurrentTab(activeDimension);
       } else {
-        // If importing inside a specific project, align project name
-        let finalDevices = res.devices;
-        if (targetProjectName && targetProjectName !== "全部项目总览") {
-          finalDevices = res.devices.map(d => ({
-            ...d,
-            projectName: targetProjectName
-          }));
-        }
-        setParsedList(finalDevices);
-        setSheetName(res.sheetName);
-
-        // Pre-select: automatically select pure new items, exclude duplicates
-        // User can manually review and check duplicates if they wish
-        const initialSelected = new Set<number>();
-        const seenInFile = new Set<string>();
-        finalDevices.forEach((item, idx) => {
-          const k = getAssetKey(item);
-          const isDbDup = existingMap.has(k);
-          const isFileDup = seenInFile.has(k);
-          seenInFile.add(k);
-
-          // By default, select purely new records
-          if (!isDbDup && !isFileDup) {
-            initialSelected.add(idx);
-          }
-        });
-
-        setSelectedIndexes(initialSelected);
+        const firstPopulated = (Object.keys(tabCounts) as DimensionType[]).find(k => tabCounts[k] > 0);
+        if (firstPopulated) setCurrentTab(firstPopulated);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "解析 Excel 文件失败，请核实文件格式。");
-      setParsedList([]);
-      setSelectedIndexes(new Set());
+      setErrorMsg(err.message || "解析 Excel 文件失败，请检查文件格式。");
+      setWorkbookResult(null);
     } finally {
       setLoading(false);
     }
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) handleFileProcess(f);
+  }
+
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
-    }
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFileProcess(f);
   }
 
-  // Toggle single row selection
-  function toggleSelect(index: number) {
-    setSelectedIndexes(prev => {
+  // Selection toggle
+  function toggleSelect(idx: number) {
+    setCurrentSelection(prev => {
       const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const visibleIndexes = filteredAnalysis.map(x => x.index);
+    const allSelected = visibleIndexes.every(i => currentSelection.has(i));
+
+    setCurrentSelection(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        visibleIndexes.forEach(i => next.delete(i));
       } else {
-        next.add(index);
+        visibleIndexes.forEach(i => next.add(i));
       }
       return next;
     });
   }
 
-  // Quick Batch Selection Actions
-  function handleSelectAll() {
-    const all = new Set<number>();
-    parsedList.forEach((_, idx) => all.add(idx));
-    setSelectedIndexes(all);
-  }
-
-  function handleSelectPureNewOnly() {
-    const pureNew = new Set<number>();
-    analysisList.forEach(a => {
-      if (!a.isDuplicate) {
-        pureNew.add(a.index);
-      }
-    });
-    setSelectedIndexes(pureNew);
-  }
-
-  function handleSelectNewAndUpdate() {
-    const set = new Set<number>();
-    analysisList.forEach(a => {
-      if (!a.isDuplicate || a.status === "db_update") {
-        set.add(a.index);
-      }
-    });
-    setSelectedIndexes(set);
-  }
-
-  function handleSelectDuplicatesOnly() {
-    const dups = new Set<number>();
-    analysisList.forEach(a => {
-      if (a.isDuplicate) {
-        dups.add(a.index);
-      }
-    });
-    setSelectedIndexes(dups);
-  }
-
-  function handleClearAll() {
-    setSelectedIndexes(new Set());
-  }
-
-  // Toggle selection for all visible rows in current filtered list
-  const isAllFilteredSelected = filteredAnalysis.length > 0 && filteredAnalysis.every(a => selectedIndexes.has(a.index));
-  function toggleSelectFiltered() {
-    setSelectedIndexes(prev => {
-      const next = new Set(prev);
-      if (isAllFilteredSelected) {
-        filteredAnalysis.forEach(a => next.delete(a.index));
-      } else {
-        filteredAnalysis.forEach(a => next.add(a.index));
-      }
-      return next;
-    });
-  }
-
-  // Confirm import of only user-selected devices
+  // Confirm Import
   function handleConfirm() {
-    if (parsedList.length === 0 || selectedIndexes.size === 0) return;
-    const selectedDevices = parsedList.filter((_, idx) => selectedIndexes.has(idx));
-    onConfirmImport(selectedDevices, strategy);
+    if (!workbookResult) return;
+
+    const selectedHardware = workbookResult.hardware.filter((_, i) => selectedHw.has(i));
+    const selectedDatabases = workbookResult.databases.filter((_, i) => selectedDb.has(i));
+    const selectedMiddlewares = workbookResult.middlewares.filter((_, i) => selectedMw.has(i));
+    const selectedBackups = workbookResult.backups.filter((_, i) => selectedBk.has(i));
+    const selectedOpsRecords = workbookResult.opsRecords.filter((_, i) => selectedOps.has(i));
+
+    if (onConfirmImportMulti) {
+      onConfirmImportMulti(
+        {
+          hardware: selectedHardware,
+          databases: selectedDatabases,
+          middlewares: selectedMiddlewares,
+          backups: selectedBackups,
+          opsRecords: selectedOpsRecords
+        },
+        strategy
+      );
+    } else if (onConfirmImport && selectedHardware.length > 0) {
+      onConfirmImport(selectedHardware, strategy);
+    }
+
     onClose();
   }
 
+  const totalSelectedCount =
+    selectedHw.size + selectedDb.size + selectedMw.size + selectedBk.size + selectedOps.size;
+
   return (
-    <div className="modal-backdrop" style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(15, 23, 42, 0.68)",
-      backdropFilter: "blur(5px)",
-      zIndex: 9999,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 16
-    }}>
-      <div style={{
-        background: "#fff",
-        borderRadius: 12,
-        width: "100%",
-        maxWidth: 1040,
-        maxHeight: "94vh",
-        display: "flex",
-        flexDirection: "column",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
-        overflow: "hidden",
-        border: "1px solid #cbd5e1"
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: "14px 20px",
-          borderBottom: "1px solid #e2e8f0",
+    <div className="cmdb-modal-mask" style={{ zIndex: 1100 }}>
+      <div
+        className="cmdb-modal"
+        style={{
+          width: "96vw",
+          maxWidth: 1320,
+          maxHeight: "92vh",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "#f8fafc"
-        }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
-              <span>📥 导入《信息资产台账》Excel 设备数据</span>
-              {targetProjectName && (
-                <span style={{ fontSize: 12, background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 12, fontWeight: 500 }}>
-                  目标项目: {targetProjectName}
-                </span>
-              )}
-            </h3>
-            <p style={{ margin: "3px 0 0", fontSize: 12, color: "#64748b" }}>
-              导入前智能查重校验 · 手工核对重复记录并自主勾选入库 · 杜绝产生重复资产
-            </p>
+          flexDirection: "column",
+          borderRadius: 12,
+          overflow: "hidden",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+        }}
+      >
+        {/* Header */}
+        <div
+          className="cmdb-modal-header"
+          style={{
+            background: "linear-gradient(135deg, #1e40af, #3b82f6)",
+            color: "#fff",
+            padding: "14px 20px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>📥</span>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>
+                信息资产台账 Excel 智能导入向导 (支持 v351 五维全表 / 单 Sheet)
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#bfdbfe" }}>
+                已对齐《信息资产台账-v351》规范 · 自动识别 02硬件、03数据库、04中间件、05备份、06运维五个 Sheet，智能查重与差异对比
+              </p>
+            </div>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
+            className="cmdb-modal-close"
+            style={{ color: "#fff", opacity: 0.8 }}
             onClick={onClose}
-            style={{ border: "none", background: "transparent", fontSize: 22, cursor: "pointer", color: "#64748b", padding: "2px 8px" }}
           >
-            ✕
+            ×
           </button>
         </div>
 
-        {/* Content Body */}
-        <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Body */}
+        <div style={{ padding: "14px 20px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {/* Upload Area */}
-          <div
-            onDragOver={e => { e.preventDefault(); setDragActive(true); }}
-            onDragLeave={() => setDragActive(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              border: dragActive ? "2px dashed #2563eb" : "2px dashed #cbd5e1",
-              background: dragActive ? "#eff6ff" : "#f8fafc",
-              borderRadius: 8,
-              padding: "16px 20px",
-              textAlign: "center",
-              cursor: "pointer",
-              transition: "all 0.2s"
-            }}
-          >
-            <input 
-              ref={fileInputRef} 
-              type="file" 
-              accept=".xlsx,.xls" 
-              style={{ display: "none" }}
-              onChange={e => {
-                if (e.target.files && e.target.files[0]) {
-                  handleFile(e.target.files[0]);
-                }
+          {!workbookResult ? (
+            <div
+              onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${dragActive ? "#2563eb" : "#cbd5e1"}`,
+                borderRadius: 10,
+                padding: "36px 20px",
+                textAlign: "center",
+                background: dragActive ? "#eff6ff" : "#f8fafc",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
               }}
-            />
-            <div style={{ fontSize: 26, marginBottom: 4 }}>📊</div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: "#1e293b", marginBottom: 2 }}>
-              {loading ? "正在解析 Excel 台账并深度执行去重比对..." : fileName ? `已解析文件: ${fileName}` : "点击选择 或 将《信息资产台账》Excel 文件拖拽至此处"}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx, .xls"
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+              />
+              <div style={{ fontSize: 36, marginBottom: 8 }}>📊</div>
+              <h4 style={{ margin: "0 0 6px", fontSize: 15, color: "#1e293b" }}>
+                点击或将《信息资产台账》Excel 文件拖拽至此
+              </h4>
+              <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>
+                支持完整《信息资产台账-v351.xlsx》（含 02-硬件设备、03-数据库、04-中间件、05-备份、06-运维 5个 Sheet），或任一独立导出的 Sheet 文件
+              </p>
+              {loading && (
+                <div style={{ marginTop: 12, color: "#2563eb", fontSize: 13, fontWeight: 600 }}>
+                  ⏳ 正在解析 Excel 工作表，请稍候...
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>
-              自动识别「02-硬件设备」工作表，基于业务IP及设备名称自动进行比对判定
+          ) : (
+            /* File summary bar */
+            <div
+              style={{
+                background: "#f1f5f9",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "8px 14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 10
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 16 }}>📄</span>
+                <span style={{ fontWeight: 600, color: "#0f172a", fontSize: 13 }}>{fileName}</span>
+                <span style={{ fontSize: 11, background: "#dbeafe", color: "#1e40af", padding: "1px 8px", borderRadius: 4 }}>
+                  已解析 {workbookResult.totalRecords} 条记录
+                </span>
+                <span style={{ fontSize: 11, color: "#64748b" }}>
+                  (包含 {workbookResult.sheetsFound.map(s => `${s.name}: ${s.count}条`).join(" · ")})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkbookResult(null);
+                  setFileName("");
+                }}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 6,
+                  padding: "3px 10px",
+                  fontSize: 11,
+                  color: "#475569",
+                  cursor: "pointer"
+                }}
+              >
+                🔄 重新上传文件
+              </button>
             </div>
-          </div>
+          )}
 
-          {/* Error message */}
           {errorMsg && (
-            <div style={{ padding: "10px 14px", borderRadius: 6, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 12 }}>
+            <div
+              style={{
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#dc2626",
+                borderRadius: 6,
+                padding: "8px 12px",
+                fontSize: 12
+              }}
+            >
               ⚠️ {errorMsg}
             </div>
           )}
 
-          {/* Duplicate Detection Alert & Manual Decision Bar */}
-          {parsedList.length > 0 && (
-            <div style={{
-              background: counts.duplicateCount > 0 ? "#fffbeb" : "#f0fdf4",
-              border: counts.duplicateCount > 0 ? "1.5px solid #fcd34d" : "1.5px solid #bbf7d0",
-              borderRadius: 8,
-              padding: "12px 16px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-            }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <span style={{ fontSize: 22, marginTop: -2 }}>
-                    {counts.duplicateCount > 0 ? "⚠️" : "✨"}
-                  </span>
-                  <div>
-                    <strong style={{ fontSize: 13, color: counts.duplicateCount > 0 ? "#92400e" : "#15803d" }}>
-                      {counts.duplicateCount > 0 
-                        ? `检测到待导入数据中存在 ${counts.duplicateCount} 台重复设备（库中已有 ${counts.dbUpdateCount + counts.dbIdenticalCount} 台，文件内部重复 ${counts.fileDuplicateCount} 台）`
-                        : `查验通过！文件中全部 ${parsedList.length} 台设备均为全新设备，无任何重复记录`}
-                    </strong>
-                    <div style={{ fontSize: 12, color: counts.duplicateCount > 0 ? "#b45309" : "#166534", marginTop: 2 }}>
-                      {counts.duplicateCount > 0
-                        ? `系统已默认仅勾选 ${counts.pureNewCount} 台全新设备，排除了所有重复记录。请您在下方手工核对重复项，按需勾选确认要导入的设备。未勾选的重复记录将不会被导入。`
-                        : `已默认全选所有全新设备，您可以直接点击下方确认导入。`}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Badges */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12, background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}>
-                    🟢 纯新设备: {counts.pureNewCount} 台
-                  </span>
-                  {counts.duplicateCount > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12, background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca" }}>
-                      ⚠️ 重复总计: {counts.duplicateCount} 台
-                    </span>
-                  )}
-                  {counts.dbUpdateCount > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12, background: "#fef3c7", color: "#b45309", border: "1px solid #fde68a" }}>
-                      🟠 包含配置变更: {counts.dbUpdateCount} 台
-                    </span>
-                  )}
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
-                    ✓ 当前已选: {selectedIndexes.size} 台
-                  </span>
-                </div>
-              </div>
-
-              {/* Fast Manual Selection Buttons */}
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 8,
-                borderTop: "1px dashed rgba(0,0,0,0.1)",
-                paddingTop: 8
-              }}>
-                <div style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>
-                  ⚡ 手工快捷选择：
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={handleSelectPureNewOnly}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      background: "#dcfce7",
-                      color: "#166534",
-                      border: "1px solid #86efac",
-                      fontWeight: 600,
-                      cursor: "pointer"
-                    }}
-                  >
-                    🟢 仅选全新设备 ({counts.pureNewCount})
-                  </button>
-
-                  {counts.dbUpdateCount > 0 && (
+          {/* Dimension Tabs & Content */}
+          {workbookResult && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+              {/* 5-Dimension Sheet Tabs */}
+              <div style={{ display: "flex", gap: 8, borderBottom: "2px solid #e2e8f0", paddingBottom: 6 }}>
+                {[
+                  { id: "hardware" as DimensionType, label: "02-硬件设备", icon: "🖥️", count: workbookResult.hardware.length, sel: selectedHw.size },
+                  { id: "database" as DimensionType, label: "03-数据库", icon: "🗄️", count: workbookResult.databases.length, sel: selectedDb.size },
+                  { id: "middleware" as DimensionType, label: "04-中间件", icon: "🧩", count: workbookResult.middlewares.length, sel: selectedMw.size },
+                  { id: "backup" as DimensionType, label: "05-备份", icon: "💾", count: workbookResult.backups.length, sel: selectedBk.size },
+                  { id: "ops" as DimensionType, label: "06-运维", icon: "🛡️", count: workbookResult.opsRecords.length, sel: selectedOps.size }
+                ].map(tab => {
+                  const isActive = currentTab === tab.id;
+                  const isPopulated = tab.count > 0;
+                  return (
                     <button
+                      key={tab.id}
                       type="button"
-                      onClick={handleSelectNewAndUpdate}
+                      onClick={() => {
+                        setCurrentTab(tab.id);
+                        setPreviewFilter("all");
+                        setSearchQuery("");
+                      }}
                       style={{
-                        fontSize: 11,
-                        padding: "4px 10px",
+                        padding: "6px 14px",
                         borderRadius: 6,
-                        background: "#fef3c7",
-                        color: "#92400e",
-                        border: "1px solid #fcd34d",
-                        fontWeight: 600,
-                        cursor: "pointer"
-                      }}
-                    >
-                      🟠 勾选全新 + 变更更新 ({counts.pureNewCount + counts.dbUpdateCount})
-                    </button>
-                  )}
-
-                  {counts.duplicateCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleSelectDuplicatesOnly}
-                      style={{
-                        fontSize: 11,
-                        padding: "4px 10px",
-                        borderRadius: 6,
-                        background: "#fee2e2",
-                        color: "#991b1b",
-                        border: "1px solid #fca5a5",
-                        fontWeight: 600,
-                        cursor: "pointer"
-                      }}
-                    >
-                      ⚠️ 仅选重复设备 ({counts.duplicateCount})
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleSelectAll}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      background: "#eff6ff",
-                      color: "#1e40af",
-                      border: "1px solid #bfdbfe",
-                      fontWeight: 600,
-                      cursor: "pointer"
-                    }}
-                  >
-                    ✓ 全选所有 ({parsedList.length})
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleClearAll}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      background: "#f1f5f9",
-                      color: "#64748b",
-                      border: "1px solid #cbd5e1",
-                      fontWeight: 600,
-                      cursor: "pointer"
-                    }}
-                  >
-                    ✕ 全部取消
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Strategy Selector */}
-          {parsedList.length > 0 && (
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
-                ⚙️ 请选择所选设备的入库策略：
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 8 }}>
-                {/* Upsert */}
-                <label style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  border: strategy === "upsert" ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
-                  background: strategy === "upsert" ? "#eff6ff" : "#fff",
-                  cursor: "pointer",
-                  fontSize: 11
-                }}>
-                  <input 
-                    type="radio" 
-                    name="strategy" 
-                    checked={strategy === "upsert"} 
-                    onChange={() => setStrategy("upsert")}
-                    style={{ marginTop: 2 }}
-                  />
-                  <div>
-                    <strong style={{ color: "#1e40af", display: "block" }}>
-                      ✨ 智能覆盖更新 (Upsert · 推荐)
-                    </strong>
-                    <span style={{ color: "#64748b", fontSize: 10 }}>
-                      勾选的新设备直接入库；已有设备更新变更字段，杜绝产生额外重复条目
-                    </span>
-                  </div>
-                </label>
-
-                {/* Skip */}
-                <label style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  border: strategy === "skip" ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
-                  background: strategy === "skip" ? "#eff6ff" : "#fff",
-                  cursor: "pointer",
-                  fontSize: 11
-                }}>
-                  <input 
-                    type="radio" 
-                    name="strategy" 
-                    checked={strategy === "skip"} 
-                    onChange={() => setStrategy("skip")}
-                    style={{ marginTop: 2 }}
-                  />
-                  <div>
-                    <strong style={{ color: "#334155", display: "block" }}>
-                      ⏭️ 仅导入新增设备 (跳过重复)
-                    </strong>
-                    <span style={{ color: "#64748b", fontSize: 10 }}>
-                      仅将勾选的新设备入库，若勾选了已有设备则保持现有资产不变
-                    </span>
-                  </div>
-                </label>
-
-                {/* Replace */}
-                <label style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  border: strategy === "replace" ? "1.5px solid #dc2626" : "1px solid #e2e8f0",
-                  background: strategy === "replace" ? "#fef2f2" : "#fff",
-                  cursor: "pointer",
-                  fontSize: 11
-                }}>
-                  <input 
-                    type="radio" 
-                    name="strategy" 
-                    checked={strategy === "replace"} 
-                    onChange={() => setStrategy("replace")}
-                    style={{ marginTop: 2 }}
-                  />
-                  <div>
-                    <strong style={{ color: "#991b1b", display: "block" }}>
-                      ⚠️ 全量覆盖同步 (Replace)
-                    </strong>
-                    <span style={{ color: "#64748b", fontSize: 10 }}>
-                      以当前选定设备为基准，完全替换目标范围历史资产清单
-                    </span>
-                  </div>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Parsing Results Preview & Manual Selection Table */}
-          {parsedList.length > 0 && (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
-              {/* Controls Bar: Filter tabs & Search box */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                {/* Tabs */}
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFilter("all")}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 10px",
-                      borderRadius: 4,
-                      border: "none",
-                      cursor: "pointer",
-                      background: previewFilter === "all" ? "#2563eb" : "#f1f5f9",
-                      color: previewFilter === "all" ? "#fff" : "#475569",
-                      fontWeight: 600
-                    }}
-                  >
-                    全部清单 ({analysisList.length})
-                  </button>
-
-                  {counts.duplicateCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter("duplicate")}
-                      style={{
-                        fontSize: 11,
-                        padding: "4px 10px",
-                        borderRadius: 4,
                         border: "none",
+                        background: isActive ? "#2563eb" : isPopulated ? "#f1f5f9" : "#f8fafc",
+                        color: isActive ? "#fff" : isPopulated ? "#1e293b" : "#94a3b8",
+                        fontWeight: isActive ? 700 : 500,
+                        fontSize: 12,
                         cursor: "pointer",
-                        background: previewFilter === "duplicate" ? "#dc2626" : "#fee2e2",
-                        color: previewFilter === "duplicate" ? "#fff" : "#991b1b",
-                        fontWeight: 600
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        boxShadow: isActive ? "0 2px 4px rgba(37,99,235,0.25)" : "none"
                       }}
                     >
-                      ⚠️ 仅看重复 ({counts.duplicateCount})
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          background: isActive ? "rgba(255,255,255,0.25)" : isPopulated ? "#e2e8f0" : "transparent",
+                          color: isActive ? "#fff" : isPopulated ? "#334155" : "#94a3b8"
+                        }}
+                      >
+                        {tab.count} 条 (已选 {tab.sel})
+                      </span>
                     </button>
-                  )}
+                  );
+                })}
+              </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFilter("pure_new")}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 10px",
-                      borderRadius: 4,
-                      border: "none",
-                      cursor: "pointer",
-                      background: previewFilter === "pure_new" ? "#15803d" : "#dcfce7",
-                      color: previewFilter === "pure_new" ? "#fff" : "#166534",
-                      fontWeight: 600
-                    }}
-                  >
-                    🟢 纯新设备 ({counts.pureNewCount})
-                  </button>
-
-                  {counts.dbUpdateCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter("db_update")}
-                      style={{
-                        fontSize: 11,
-                        padding: "4px 10px",
-                        borderRadius: 4,
-                        border: "none",
-                        cursor: "pointer",
-                        background: previewFilter === "db_update" ? "#d97706" : "#fef3c7",
-                        color: previewFilter === "db_update" ? "#fff" : "#92400e",
-                        fontWeight: 600
-                      }}
-                    >
-                      🟠 变更更新 ({counts.dbUpdateCount})
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFilter("selected")}
-                    style={{
-                      fontSize: 11,
-                      padding: "4px 10px",
-                      borderRadius: 4,
-                      border: "none",
-                      cursor: "pointer",
-                      background: previewFilter === "selected" ? "#4338ca" : "#e0e7ff",
-                      color: previewFilter === "selected" ? "#fff" : "#3730a3",
-                      fontWeight: 600
-                    }}
-                  >
-                    ✓ 已勾选 ({selectedIndexes.size})
-                  </button>
+              {/* Action & Strategy Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  background: "#f8fafc",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e2e8f0"
+                }}
+              >
+                {/* Left: Strategy */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>入库策略:</span>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="importStrategy"
+                      checked={strategy === "upsert"}
+                      onChange={() => setStrategy("upsert")}
+                    />
+                    <strong style={{ color: "#2563eb" }}>智能覆盖更新 (upsert)</strong>
+                    <span style={{ color: "#64748b", fontSize: 11 }}>新资产录入，已有资产合并变更</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="importStrategy"
+                      checked={strategy === "skip"}
+                      onChange={() => setStrategy("skip")}
+                    />
+                    <span>仅导入新增 (skip)</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="importStrategy"
+                      checked={strategy === "replace"}
+                      onChange={() => setStrategy("replace")}
+                    />
+                    <span style={{ color: "#dc2626" }}>全量替换 (replace)</span>
+                  </label>
                 </div>
 
-                {/* Search Input */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {/* Right: Search */}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     type="text"
-                    placeholder="🔍 检索设备名、IP、项目..."
+                    placeholder={`在当前 ${currentTab} 中搜索 IP、名称或配置...`}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     style={{
                       padding: "4px 10px",
-                      fontSize: 11,
-                      borderRadius: 4,
+                      fontSize: 12,
                       border: "1px solid #cbd5e1",
-                      outline: "none",
-                      width: 180
+                      borderRadius: 6,
+                      width: 240
                     }}
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 12 }}
+                      style={{ fontSize: 11, background: "none", border: "none", color: "#64748b", cursor: "pointer" }}
                     >
-                      ✕
+                      清空
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Table Container */}
-              <div style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 6,
-                overflowX: "auto",
-                overflowY: "auto",
-                maxHeight: 330,
-                position: "relative"
-              }}>
-                <table className="cmdb-data-table" style={{ fontSize: 11, width: "100%", whiteSpace: "nowrap", borderCollapse: "separate", borderSpacing: 0 }}>
-                  <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "#f1f5f9" }}>
+              {/* Sub-Filters */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "all" as const, label: `全部 (${currentAnalysis.length})` },
+                    { id: "pure_new" as const, label: `纯新录入 (${currentAnalysis.filter(x => x.status === "pure_new").length})` },
+                    { id: "db_update" as const, label: `配置变更 (${currentAnalysis.filter(x => x.status === "db_update").length})` },
+                    { id: "duplicate" as const, label: `已有重复 (${currentAnalysis.filter(x => x.isDuplicate).length})` },
+                    { id: "selected" as const, label: `已勾选 (${currentSelection.size})` }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setPreviewFilter(f.id)}
+                      style={{
+                        padding: "3px 10px",
+                        borderRadius: 4,
+                        border: "1px solid",
+                        borderColor: previewFilter === f.id ? "#93c5fd" : "#e2e8f0",
+                        background: previewFilter === f.id ? "#eff6ff" : "#fff",
+                        color: previewFilter === f.id ? "#1d4ed8" : "#475569",
+                        fontWeight: previewFilter === f.id ? 600 : 400,
+                        fontSize: 11,
+                        cursor: "pointer"
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  style={{
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 4,
+                    padding: "3px 8px",
+                    fontSize: 11,
+                    color: "#334155",
+                    cursor: "pointer"
+                  }}
+                >
+                  {filteredAnalysis.every(x => currentSelection.has(x.index)) ? "取消全选本页" : "全选本页记录"}
+                </button>
+              </div>
+
+              {/* Preview Table */}
+              <div
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 8,
+                  overflowX: "auto",
+                  maxHeight: 380,
+                  background: "#fff"
+                }}
+              >
+                <table className="cmdb-table" style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 5 }}>
                     <tr>
-                      <th style={{ width: 44, textAlign: "center", padding: "6px 8px" }}>
+                      <th style={{ width: 36, textAlign: "center" }}>
                         <input
                           type="checkbox"
-                          checked={isAllFilteredSelected}
-                          onChange={toggleSelectFiltered}
-                          title="全选/反选当前列表"
-                          style={{ cursor: "pointer" }}
+                          checked={filteredAnalysis.length > 0 && filteredAnalysis.every(x => currentSelection.has(x.index))}
+                          onChange={toggleSelectAll}
                         />
                       </th>
-                      <th style={{ width: 110 }}>判定状态</th>
-                      <th>序号</th>
-                      <th>设备名称</th>
-                      <th>所属项目</th>
-                      <th>业务IP / 私有IP</th>
-                      <th>重复判定与差异分析</th>
-                      <th>规格 (CPU/内存/磁盘)</th>
-                      <th>操作系统</th>
-                      <th>信创</th>
-                      <th>远程端口</th>
+                      <th style={{ width: 45 }}>序号</th>
+                      <th style={{ width: 110 }}>状态 / 查重</th>
+
+                      {currentTab === "hardware" && (
+                        <>
+                          <th>设备名称</th>
+                          <th>项目名称</th>
+                          <th>私有IP (业务IP)</th>
+                          <th>算力配置</th>
+                          <th>操作系统</th>
+                          <th>信创</th>
+                          <th>远程端口</th>
+                        </>
+                      )}
+
+                      {currentTab === "database" && (
+                        <>
+                          <th>数据库软件</th>
+                          <th>私有IP (业务IP)</th>
+                          <th>项目名称</th>
+                          <th>监听端口</th>
+                          <th>实例/SID</th>
+                          <th>业务库名</th>
+                          <th>部署模式</th>
+                        </>
+                      )}
+
+                      {currentTab === "middleware" && (
+                        <>
+                          <th>中间件软件</th>
+                          <th>私有IP (业务IP)</th>
+                          <th>项目名称</th>
+                          <th>中间件类型</th>
+                          <th>版本</th>
+                          <th>服务端口</th>
+                        </>
+                      )}
+
+                      {currentTab === "backup" && (
+                        <>
+                          <th>私有IP (业务IP)</th>
+                          <th>项目名称</th>
+                          <th>备份类型</th>
+                          <th>备份方式</th>
+                          <th>备份策略</th>
+                          <th>存储位置</th>
+                        </>
+                      )}
+
+                      {currentTab === "ops" && (
+                        <>
+                          <th>私有IP (业务IP)</th>
+                          <th>项目名称</th>
+                          <th>运维厂商</th>
+                          <th>VPN账号</th>
+                          <th>堡垒机账号</th>
+                          <th>访问服务器地址</th>
+                        </>
+                      )}
+
+                      <th>变更说明 / 备注</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredAnalysis.length === 0 ? (
                       <tr>
-                        <td colSpan={11} style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8" }}>
-                          未找到匹配的数据条目
+                        <td colSpan={10} style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8" }}>
+                          没有符合当前筛选条件的记录
                         </td>
                       </tr>
                     ) : (
-                      filteredAnalysis.map((item) => {
-                        const d = item.device;
-                        const isSelected = selectedIndexes.has(item.index);
+                      filteredAnalysis.map(row => {
+                        const isChecked = currentSelection.has(row.index);
+                        const it: any = row.item;
+
                         return (
-                          <tr 
-                            key={item.index}
-                            onClick={() => toggleSelect(item.index)}
+                          <tr
+                            key={row.index}
                             style={{
-                              background: isSelected 
-                                ? (item.isDuplicate ? "#fffbeb" : "#f0fdf4")
-                                : (item.isDuplicate ? "#fff5f5" : "#ffffff"),
-                              cursor: "pointer",
-                              transition: "background 0.15s"
+                              background: isChecked ? (row.isDuplicate ? "#fffbeb" : "#f0fdf4") : undefined,
+                              cursor: "pointer"
                             }}
+                            onClick={() => toggleSelect(row.index)}
                           >
-                            <td 
-                              style={{ textAlign: "center", padding: "6px 8px" }}
-                              onClick={e => e.stopPropagation()}
-                            >
+                            <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
                               <input
                                 type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleSelect(item.index)}
-                                style={{ cursor: "pointer" }}
+                                checked={isChecked}
+                                onChange={() => toggleSelect(row.index)}
                               />
                             </td>
+                            <td>{it.seq || (row.index + 1)}</td>
                             <td>
-                              {item.status === "pure_new" && (
-                                <span style={{
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  background: "#dcfce7",
-                                  color: "#15803d"
-                                }}>
-                                  🟢 纯新设备
+                              {row.status === "pure_new" && (
+                                <span style={{ background: "#dcfce7", color: "#166534", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                                  🟢 纯新录入
                                 </span>
                               )}
-                              {item.status === "file_duplicate" && (
-                                <span style={{
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  background: "#fee2e2",
-                                  color: "#b91c1c"
-                                }}>
+                              {row.status === "db_update" && (
+                                <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                                  🟠 配置更新
+                                </span>
+                              )}
+                              {row.status === "db_identical" && (
+                                <span style={{ background: "#f1f5f9", color: "#64748b", padding: "1px 6px", borderRadius: 4, fontSize: 10 }}>
+                                  ⚪ 完全相同
+                                </span>
+                              )}
+                              {row.status === "file_duplicate" && (
+                                <span style={{ background: "#fee2e2", color: "#b91c1c", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
                                   ⚠️ 文件内重复
                                 </span>
                               )}
-                              {item.status === "db_update" && (
-                                <span style={{
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  background: "#fef3c7",
-                                  color: "#b45309"
-                                }}>
-                                  🟠 覆盖更新
-                                </span>
-                              )}
-                              {item.status === "db_identical" && (
-                                <span style={{
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  background: "#fee2e2",
-                                  color: "#b91c1c"
-                                }}>
-                                  ⚠️ 库中已有
-                                </span>
-                              )}
                             </td>
-                            <td>{d.seq || (item.index + 1)}</td>
-                            <td style={{ fontWeight: 600, color: "#1e293b" }}>{d.name}</td>
-                            <td>{d.projectName}</td>
-                            <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600 }}>
-                              {d.privateIp || d.ip || "-"}
-                            </td>
+
+                            {/* Dimension Columns */}
+                            {currentTab === "hardware" && (
+                              <>
+                                <td style={{ fontWeight: 600, color: "#1e293b" }}>{it.name}</td>
+                                <td>{it.projectName}</td>
+                                <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600 }}>{it.privateIp || it.ip || "-"}</td>
+                                <td>{it.cpu} · {it.memory}</td>
+                                <td>{it.os}</td>
+                                <td>
+                                  <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 3, background: it.isXinchuang === "是" ? "#fee2e2" : "#f1f5f9", color: it.isXinchuang === "是" ? "#dc2626" : "#64748b" }}>
+                                    {it.isXinchuang === "是" ? "信创" : "非信创"}
+                                  </span>
+                                </td>
+                                <td style={{ fontFamily: "monospace" }}>{it.remotePort || 22}</td>
+                              </>
+                            )}
+
+                            {currentTab === "database" && (
+                              <>
+                                <td style={{ fontWeight: 600, color: "#4338ca" }}>{it.dbSoftware || it.type}</td>
+                                <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600 }}>{it.privateIp || it.hostIp || "-"}</td>
+                                <td>{it.projectName}</td>
+                                <td style={{ fontFamily: "monospace" }}>{it.port}</td>
+                                <td>{it.instanceSid || "-"}</td>
+                                <td>{it.dbName || "-"}</td>
+                                <td>{it.deployMode || "单机"}</td>
+                              </>
+                            )}
+
+                            {currentTab === "middleware" && (
+                              <>
+                                <td style={{ fontWeight: 600, color: "#0d9488" }}>{it.mwSoftware || it.name}</td>
+                                <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600 }}>{it.privateIp || "-"}</td>
+                                <td>{it.projectName}</td>
+                                <td>{it.mwType}</td>
+                                <td>{it.version || "-"}</td>
+                                <td style={{ fontFamily: "monospace" }}>{it.port || "-"}</td>
+                              </>
+                            )}
+
+                            {currentTab === "backup" && (
+                              <>
+                                <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600 }}>{it.privateIp || "-"}</td>
+                                <td>{it.projectName}</td>
+                                <td>{it.backupType || "数据库"}</td>
+                                <td>{it.backupMethod || "物理备份"}</td>
+                                <td>{it.backupPolicy || "-"}</td>
+                                <td>{it.storageLocation || "-"}</td>
+                              </>
+                            )}
+
+                            {currentTab === "ops" && (
+                              <>
+                                <td style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600 }}>{it.privateIp || "-"}</td>
+                                <td>{it.projectName}</td>
+                                <td style={{ fontWeight: 600 }}>{it.opsVendor}</td>
+                                <td>{it.vpnAccount || "-"}</td>
+                                <td>{it.bastionAccount || "-"}</td>
+                                <td style={{ fontFamily: "monospace", fontSize: 11 }}>{it.serverAccessAddress || "-"}</td>
+                              </>
+                            )}
+
                             <td>
-                              {item.status === "file_duplicate" && (
-                                <span style={{ color: "#dc2626", fontSize: 11, fontWeight: 500 }}>
-                                  {item.duplicateReason}
-                                </span>
-                              )}
-                              {item.status === "db_update" && item.diffResult?.diffs && (
-                                <div>
-                                  <div style={{ color: "#92400e", fontSize: 10, fontWeight: 500, marginBottom: 2 }}>
-                                    {item.duplicateReason}
-                                  </div>
-                                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                    {item.diffResult.diffs.map((df, di) => (
-                                      <span key={di} style={{ color: "#b45309", fontSize: 10, background: "#fffbeb", border: "1px solid #fde68a", padding: "1px 5px", borderRadius: 3 }}>
-                                        {df.label}: {String(df.oldVal)} ➔ {String(df.newVal)}
-                                      </span>
-                                    ))}
-                                  </div>
+                              {row.diffResult?.diffs ? (
+                                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                  {row.diffResult.diffs.map((df, di) => (
+                                    <span key={di} style={{ color: "#b45309", fontSize: 10, background: "#fffbeb", border: "1px solid #fde68a", padding: "1px 5px", borderRadius: 3 }}>
+                                      {df.label}: {String(df.oldVal)} ➔ {String(df.newVal)}
+                                    </span>
+                                  ))}
                                 </div>
-                              )}
-                              {item.status === "db_identical" && (
-                                <span style={{ color: "#b91c1c", fontSize: 11 }}>
-                                  {item.duplicateReason}
-                                </span>
-                              )}
-                              {item.status === "pure_new" && (
-                                <span style={{ color: "#15803d", fontSize: 11 }}>
-                                  {item.duplicateReason || "新发现设备，无历史重复记录"}
-                                </span>
+                              ) : (
+                                <span style={{ color: "#64748b", fontSize: 11 }}>{row.duplicateReason || it.remarks || "—"}</span>
                               )}
                             </td>
-                            <td>{d.cpu} · {d.memory}</td>
-                            <td>{d.os}</td>
-                            <td>
-                              <span style={{
-                                padding: "1px 6px",
-                                borderRadius: 4,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                background: d.isXinchuang === "是" ? "#fee2e2" : "#f1f5f9",
-                                color: d.isXinchuang === "是" ? "#dc2626" : "#64748b"
-                              }}>
-                                {d.isXinchuang === "是" ? "信创" : "非信创"}
-                              </span>
-                            </td>
-                            <td style={{ fontFamily: "monospace" }}>{d.remotePort || 22}</td>
                           </tr>
                         );
                       })
@@ -1012,62 +987,53 @@ export default function ImportModal({
                   </tbody>
                 </table>
               </div>
-
-              {/* Table status tip */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#64748b", padding: "0 2px" }}>
-                <span>
-                  当前展示 {filteredAnalysis.length} 条记录 / 共解析 {analysisList.length} 条（支持点击整行进行勾选切换）
-                </span>
-                <span>
-                  已手工勾选 <strong style={{ color: "#2563eb" }}>{selectedIndexes.size}</strong> 台
-                  {selectedDuplicateCount > 0 && (
-                    <span style={{ color: "#d97706", marginLeft: 4 }}>
-                      （含手工选入的重复记录 {selectedDuplicateCount} 台）
-                    </span>
-                  )}
-                </span>
-              </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{
-          padding: "12px 20px",
-          borderTop: "1px solid #e2e8f0",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "#f8fafc"
-        }}>
+        <div
+          style={{
+            padding: "12px 20px",
+            borderTop: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "#f8fafc"
+          }}
+        >
           <div style={{ fontSize: 12, color: "#64748b" }}>
-            {parsedList.length > 0 && (
+            {workbookResult ? (
               <span>
-                入库策略: <strong style={{ color: strategy === "replace" ? "#dc2626" : "#2563eb" }}>
-                  {strategy === "upsert" ? "智能覆盖更新 (杜绝产生冗余重复)" : strategy === "skip" ? "仅导入新增 (跳过重复)" : "全量覆盖同步"}
-                </strong>
+                全套已选: 硬件 <strong style={{ color: "#2563eb" }}>{selectedHw.size}</strong> 台 · 
+                数据库 <strong style={{ color: "#4338ca" }}>{selectedDb.size}</strong> 条 · 
+                中间件 <strong style={{ color: "#0d9488" }}>{selectedMw.size}</strong> 条 · 
+                备份 <strong style={{ color: "#ea580c" }}>{selectedBk.size}</strong> 条 · 
+                运维 <strong style={{ color: "#059669" }}>{selectedOps.size}</strong> 条
               </span>
+            ) : (
+              <span>请先上传 Excel 文件</span>
             )}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" className="btn-secondary" onClick={onClose}>
               取消
             </button>
-            <button 
-              type="button" 
-              className="btn-primary" 
-              disabled={parsedList.length === 0 || selectedIndexes.size === 0 || loading}
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!workbookResult || totalSelectedCount === 0 || loading}
               onClick={handleConfirm}
               style={{
-                opacity: (parsedList.length === 0 || selectedIndexes.size === 0) ? 0.5 : 1,
-                cursor: (parsedList.length === 0 || selectedIndexes.size === 0) ? "not-allowed" : "pointer",
-                background: selectedIndexes.size === 0 ? "#94a3b8" : "#2563eb",
+                opacity: !workbookResult || totalSelectedCount === 0 ? 0.5 : 1,
+                cursor: !workbookResult || totalSelectedCount === 0 ? "not-allowed" : "pointer",
+                background: totalSelectedCount === 0 ? "#94a3b8" : "#2563eb",
                 display: "flex",
                 alignItems: "center",
                 gap: 6
               }}
             >
-              <span>✓ 确认导入已选数据 ({selectedIndexes.size} / {parsedList.length} 台)</span>
+              <span>✓ 确认导入已选数据 (共 {totalSelectedCount} 条记录)</span>
             </button>
           </div>
         </div>

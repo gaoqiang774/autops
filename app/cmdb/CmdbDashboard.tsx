@@ -69,10 +69,10 @@ export default function CmdbDashboard({
 
   const xinchuangPercent = Math.round((xinchuangCount / (xinchuangCount + nonXinchuangCount || 1)) * 100);
 
-  // Compute total cores, memory, disk
-  const totalCores = projects.reduce((acc, p) => acc + p.totalCores, 0);
-  const totalMemGb = projects.reduce((acc, p) => acc + p.totalMemoryGb, 0);
-  const totalDiskGb = projects.reduce((acc, p) => acc + p.totalDiskGb, 0);
+  // Compute total cores, memory, disk directly from assets
+  const totalCores = useMemo(() => [...hosts, ...vms].reduce((acc, h) => acc + (h.cpuCores || 0), 0), [hosts, vms]);
+  const totalMemGb = useMemo(() => [...hosts, ...vms].reduce((acc, h) => acc + (h.memoryGb || 0), 0), [hosts, vms]);
+  const totalDiskGb = useMemo(() => [...hosts, ...vms].reduce((acc, h) => acc + (h.systemDiskGb || 0) + (h.dataDiskGb || 0), 0), [hosts, vms]);
   const totalDiskTb = (totalDiskGb / 1024).toFixed(1);
 
   // Top Projects sorted by asset count

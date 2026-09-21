@@ -39,7 +39,7 @@ export const initialUsers: UserAccount[] = [
     email: "zhang_ops@beikong.com",
     status: "active",
     authorizedProjects: [
-      "调解仲裁系统 (北京市人力资源和社会保障局)",
+      "调解仲裁系统",
       "原三险系统",
       "仲裁云庭审系统"
     ],
