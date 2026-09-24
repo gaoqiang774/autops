@@ -10,12 +10,14 @@
     "build": "vinext build",
     "deploy": "vinext build && wrangler deploy --config dist/server/wrangler.json",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs && node --test tests/excel_roundtrip.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:init:mysql": "python scripts/import_to_mysql.py"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
+    "mysql2": "^3.24.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "xlsx": "^0.18.5"

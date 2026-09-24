@@ -48,17 +48,17 @@ export const DB_COL_WIDTHS = [
   { wch: 14 }, { wch: 16 }, { wch: 30 }
 ];
 
-// 04-中间件 (13 columns)
+// 04-中间件 (14 columns - 对齐v360标准规范)
 export const MW_EXCEL_HEADERS = [
   "序号", "项目编号", "客户名称", "项目名称", "环境", "云厂商", "区域名称",
   "私有IP（业务IP）", "中间件类型", "中间件软件名称", "中间件版本",
-  "服务端口", "备注"
+  "服务端口", "应用程序运行环境", "备注"
 ];
 
 export const MW_COL_WIDTHS = [
   { wch: 6 },  { wch: 12 }, { wch: 28 }, { wch: 26 }, { wch: 8 },
   { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 22 },
-  { wch: 14 }, { wch: 20 }, { wch: 30 }
+  { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 30 }
 ];
 
 // 05-备份 (13 columns)
@@ -73,17 +73,18 @@ export const BK_COL_WIDTHS = [
   { wch: 18 }, { wch: 32 }, { wch: 30 }
 ];
 
-// 06-运维 (15 columns)
+// 06-运维 (18 columns - 包含VPN/堡垒机使用者名字)
 export const OPS_EXCEL_HEADERS = [
-  "序号", "项目编号", "客户名称", "项目名称", "环境", "云厂商", "区域名称",
-  "私有IP（业务IP）", "运维厂商", "VPN地址", "VPN账号", "堡垒机地址",
-  "堡垒机账号", "访问服务器地址", "备注"
+  "序号", "项目编号", "客户名称", "项目名称", "环境", "云厂商", "人员归属", "使用人网络环境",
+  "私有IP（业务IP）", "运维厂商", "VPN地址", "VPN账号", "VPN使用人", "堡垒机地址",
+  "堡垒机账号", "堡垒机使用人", "访问服务器地址", "备注"
 ];
 
 export const OPS_COL_WIDTHS = [
   { wch: 6 },  { wch: 12 }, { wch: 28 }, { wch: 26 }, { wch: 8 },
-  { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 22 },
-  { wch: 18 }, { wch: 32 }, { wch: 18 }, { wch: 30 }, { wch: 30 }
+  { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 18 }, { wch: 26 },
+  { wch: 22 }, { wch: 20 }, { wch: 14 }, { wch: 26 }, { wch: 20 },
+  { wch: 14 }, { wch: 30 }, { wch: 30 }
 ];
 
 // ========================================================================
@@ -174,6 +175,7 @@ export function middlewareToExcelRow(mw: MiddlewareAsset, index: number): (strin
     mw.mwSoftware || mw.name || null,
     mw.version || null,
     mw.port || null,
+    mw.runtime || "JDK8",
     mw.remarks || null
   ];
 }
@@ -204,13 +206,16 @@ export function opsToExcelRow(ops: OpsAsset, index: number): (string | number | 
     ops.projectName || "",
     ops.env || "生产",
     ops.cloudVendor || "联通云",
-    ops.regionName || "政务外网区",
+    ops.personnelAffiliation || "伟仕",
+    ops.vpnNetworkEnv || "互联网区",
     ops.privateIp || null,
     ops.opsVendor || "北京北控伟仕软件有限公司",
     ops.vpnAddress || null,
     ops.vpnAccount || null,
+    ops.vpnUserName || null,
     ops.bastionAddress || null,
     ops.bastionAccount || null,
+    ops.bastionUserName || null,
     ops.serverAccessAddress || null,
     ops.remarks || null
   ];
@@ -274,7 +279,7 @@ export function exportMiddlewaresToExcel(middlewares: MiddlewareAsset[], scopeTi
   const dataRows = middlewares.map((m, i) => middlewareToExcelRow(m, i));
   const categoryRow: (string | null)[] = [
     "基本信息", null, null, null, null, null, null, null,
-    "中间件信息", null, null, null,
+    "中间件信息", null, null, null, null,
     "其他"
   ];
   const ws = buildV351Worksheet("04-中间件", categoryRow, MW_EXCEL_HEADERS, dataRows, MW_COL_WIDTHS);
@@ -572,6 +577,7 @@ export function parseMiddlewareRows(rawRows: any[][]): (MiddlewareAsset & { isIm
       name: nameStr,
       version: getCellVal(r, headers, ["中间件版本", "版本"]) ? String(getCellVal(r, headers, ["中间件版本", "版本"])) : "",
       port: getCellVal(r, headers, ["服务端口", "端口"]) ? String(getCellVal(r, headers, ["服务端口", "端口"])) : "",
+      runtime: String(getCellVal(r, headers, ["应用程序运行环境", "运行环境", "运行时依赖", "运行时", "Runtime"]) || "JDK8"),
       status: "running",
       remarks: getCellVal(r, headers, ["备注"]) ? String(getCellVal(r, headers, ["备注"])) : "",
       isImported: true
@@ -657,12 +663,14 @@ export function parseOpsRows(rawRows: any[][]): (OpsAsset & { isImported?: boole
       env: String(getCellVal(r, headers, ["环境"]) || "生产"),
       cloudVendor: String(getCellVal(r, headers, ["云厂商"]) || "联通云"),
       regionName: String(getCellVal(r, headers, ["区域名称", "区域"]) || "政务外网区"),
-      privateIp: privateIp ? String(privateIp) : "",
-      opsVendor: String(vendor || "北京北控伟仕软件有限公司"),
+      personnelAffiliation: String(getCellVal(r, headers, ["人员归属", "人员", "归属"]) || "伟仕"),
+      vpnNetworkEnv: String(getCellVal(r, headers, ["使用人网vpn络环境", "网络环境", "网络"]) || "互联网区"),
       vpnAddress: getCellVal(r, headers, ["VPN地址"]) ? String(getCellVal(r, headers, ["VPN地址"])) : "",
       vpnAccount: getCellVal(r, headers, ["VPN账号"]) ? String(getCellVal(r, headers, ["VPN账号"])) : "",
+      vpnUserName: getCellVal(r, headers, ["VPN使用人", "VPN对应名称", "对应名称", "使用人", "使用者"]) ? String(getCellVal(r, headers, ["VPN使用人", "VPN对应名称", "对应名称", "使用人", "使用者"])) : "",
       bastionAddress: getCellVal(r, headers, ["堡垒机地址"]) ? String(getCellVal(r, headers, ["堡垒机地址"])) : "",
       bastionAccount: getCellVal(r, headers, ["堡垒机账号"]) ? String(getCellVal(r, headers, ["堡垒机账号"])) : "",
+      bastionUserName: getCellVal(r, headers, ["堡垒机使用人", "堡垒机对应名称"]) ? String(getCellVal(r, headers, ["堡垒机使用人", "堡垒机对应名称"])) : "",
       serverAccessAddress: getCellVal(r, headers, ["访问服务器地址", "服务器地址"]) ? String(getCellVal(r, headers, ["访问服务器地址", "服务器地址"])) : "",
       monitoringCoverage: "是",
       inspectionCycle: "每日",

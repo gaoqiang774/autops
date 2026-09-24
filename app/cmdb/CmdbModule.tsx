@@ -75,6 +75,58 @@ export default function CmdbModule({
   const [softwareList, setSoftwareList] = useState<SoftwareComponent[]>(initialSoftwareComponents);
   const [channelList, setChannelList] = useState<OpsChannel[]>(initialOpsChannels);
 
+  // API & Database Data Fetching State
+  const [dataSource, setDataSource] = useState<"mysql" | "v360_api" | "memory">("v360_api");
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
+  const [isApiLoading, setIsApiLoading] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("");
+
+  const refreshFromApi = React.useCallback(async () => {
+    setIsApiLoading(true);
+    try {
+      const res = await fetch("/api/cmdb/all");
+      if (res.ok) {
+        const json = await res.json();
+        const payload = json.data || json;
+        if (json.ok || json.success || payload) {
+          if (Array.isArray(payload.projects) && payload.projects.length > 0) {
+            setProjects(payload.projects);
+          }
+          const rawHosts = payload.hosts || payload.physicalHosts;
+          if (Array.isArray(rawHosts)) {
+            setHosts(rawHosts);
+          }
+          if (Array.isArray(payload.vms) && payload.vms.length > 0) {
+            setVms(payload.vms);
+          }
+          if (Array.isArray(payload.databases)) {
+            setDatabases(payload.databases);
+          }
+          if (Array.isArray(payload.middlewares)) {
+            setMiddlewares(payload.middlewares);
+          }
+          if (Array.isArray(payload.backups)) {
+            setBackups(payload.backups);
+          }
+          if (Array.isArray(payload.opsRecords)) {
+            setOpsRecords(payload.opsRecords);
+          }
+          setDataSource(json.source || (json.isDatabaseConnected ? "mysql" : "v360_api"));
+          setIsDbConnected(!!(json.isDatabaseConnected || json.isDbConnected));
+          setLastSyncTime(new Date().toLocaleTimeString());
+        }
+      }
+    } catch (e) {
+      console.warn("Fetch CMDB data from API failed, using fallback v360 data:", e);
+    } finally {
+      setIsApiLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshFromApi();
+  }, [refreshFromApi]);
+
   // 5-Dimension Handlers for Databases
   function handleAddDatabase(newDb: DatabaseAsset) {
     setDatabases(prev => [newDb, ...prev]);
@@ -635,6 +687,22 @@ export default function CmdbModule({
   }, [softwareList, currentUser, authorizedProjectNames, authorizedProjectIds]);
 
   const authorizedBusinesses = useMemo(() => {
+    const baseProjects = authorizedProjects && authorizedProjects.length > 0 ? authorizedProjects : projects;
+    if (baseProjects && baseProjects.length > 0) {
+      return baseProjects.map(p => ({
+        id: p.id,
+        name: p.name,
+        code: p.id.toUpperCase(),
+        department: p.customerName || "业务保障中心",
+        manager: "项目责任人",
+        level: "核心",
+        hostCount: (authorizedVms.filter(v => v.projectName === p.name).length) +
+                   (authorizedHosts.filter(h => h.projectName === p.name).length),
+        status: "运行中",
+        description: `所属环境: ${p.env || "生产"} · 云厂商: ${p.cloudVendor || "联通云"} · 区域: ${p.regionName || "政务外网区"}`,
+        hosts: authorizedVms.filter(v => v.projectName === p.name).map(v => v.privateIp || v.ip)
+      }));
+    }
     if (!currentUser || currentUser.role === "admin" || currentUser.authorizedProjects === "all") {
       return businesses;
     }
@@ -642,7 +710,7 @@ export default function CmdbModule({
       authorizedProjectNames.has(b.name) ||
       authorizedProjectIds.has(b.id)
     );
-  }, [businesses, currentUser, authorizedProjectNames, authorizedProjectIds]);
+  }, [authorizedProjects, projects, authorizedVms, authorizedHosts, businesses, currentUser, authorizedProjectNames, authorizedProjectIds]);
 
   return (
     <div style={{
@@ -739,6 +807,11 @@ export default function CmdbModule({
           onBatchImportBackups={handleBatchImportBackups}
           onBatchImportOpsRecords={handleBatchImportOpsRecords}
           onBatchImportMultiDimension={handleBatchImportMultiDimension}
+          dataSource={dataSource}
+          isDbConnected={isDbConnected}
+          isApiLoading={isApiLoading}
+          onRefreshApi={refreshFromApi}
+          lastSyncTime={lastSyncTime}
         />
       )}
 
@@ -762,9 +835,12 @@ export default function CmdbModule({
           hosts={authorizedHosts}
           vms={authorizedVms}
           databases={authorizedDatabases}
+          middlewares={authorizedMiddlewares}
+          backups={authorizedBackups}
           switches={authorizedSwitches}
           rooms={[]}
           cabinets={[]}
+          onNavigateToProject={onPageChange}
         />
       )}
 

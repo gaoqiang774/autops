@@ -3,6 +3,31 @@ import React, { useState, useMemo } from "react";
 import { PhysicalHost, VmHost, SwitchDevice, DatabaseAsset, MiddlewareAsset, BackupAsset, OpsAsset, ProjectGroup, AssetMeta, SoftwareComponent, OpsChannel } from "../cmdbData";
 import { exportAssetsToExcel, exportDatabasesToExcel, exportMiddlewaresToExcel, exportBackupsToExcel, exportOpsToExcel, exportAllV351Workbook, getAssetKey } from "./excelExport";
 import ImportModal, { ImportStrategy } from "./ImportModal";
+import {
+  EXCEL_CUSTOMERS,
+  EXCEL_PROJECTS,
+  EXCEL_ENVIRONMENTS,
+  EXCEL_CLOUD_VENDORS,
+  EXCEL_REGION_NAMES,
+  EXCEL_DEVICE_CATEGORIES,
+  EXCEL_DEVICE_TYPES,
+  EXCEL_IDC_ROOMS,
+  EXCEL_OS_FAMILIES,
+  EXCEL_OS_VERSIONS,
+  EXCEL_CPU_ARCHS,
+  EXCEL_DB_CATEGORIES,
+  EXCEL_DB_SOFTWARES,
+  EXCEL_DB_DEPLOY_MODES,
+  EXCEL_MIDDLEWARE_TYPES,
+  EXCEL_MIDDLEWARE_SOFTWARES,
+  EXCEL_MW_TYPE_SOFTWARE_MAP,
+  EXCEL_DB_CATEGORY_SOFTWARE_MAP,
+  EXCEL_APP_RUNTIMES,
+  EXCEL_BACKUP_STRATEGIES,
+  EXCEL_BACKUP_TYPES,
+  EXCEL_BACKUP_METHODS,
+  EXCEL_CODE_DICT
+} from "../cmdbCodeDict";
 
 interface HostManagementProps {
   projects: ProjectGroup[];
@@ -71,6 +96,11 @@ interface HostManagementProps {
   onUpdateVm?: (v: VmHost) => void;
   onDeleteUnifiedAsset?: (id: string, kind: "physical" | "vm" | "switch") => void;
   onAddProject?: (p: ProjectGroup) => void;
+  dataSource?: "mysql" | "v360_api" | "memory";
+  isDbConnected?: boolean;
+  isApiLoading?: boolean;
+  onRefreshApi?: () => void;
+  lastSyncTime?: string;
 }
 
 type UnifiedAsset = (PhysicalHost | VmHost | SwitchDevice) & {
@@ -113,7 +143,12 @@ export default function HostManagement({
   onBatchImportMiddlewares,
   onBatchImportBackups,
   onBatchImportOpsRecords,
-  onBatchImportMultiDimension
+  onBatchImportMultiDimension,
+  dataSource = "v360_api",
+  isDbConnected = false,
+  isApiLoading = false,
+  onRefreshApi,
+  lastSyncTime = ""
 }: HostManagementProps) {
   // Tabs & Modal States for Software, Ops Channels, and VPN
   const [detailTab, setDetailTab] = useState<"spec" | "database" | "middleware" | "backup" | "ops">("spec");
@@ -292,11 +327,15 @@ export default function HostManagement({
     cloudVendor: "联通云",
     regionName: "政务外网区",
     privateIp: "",
+    personnelAffiliation: "伟仕",
+    vpnNetworkEnv: "互联网区",
     opsVendor: "北京北控伟仕软件有限公司",
     vpnAddress: "114.255.48.18:443",
     vpnAccount: "vpn_ops_prod",
+    vpnUserName: "",
     bastionAddress: "https://jumpserver.bj-gov.cn:443",
     bastionAccount: "jumpserver_admin",
+    bastionUserName: "",
     serverAccessAddress: "ssh root@192.125.31.x -p 10022",
     monitoringCoverage: "是" as "是" | "部分" | "否",
     inspectionCycle: "每日" as "每日" | "每周" | "每月" | "每季",
@@ -710,7 +749,8 @@ export default function HostManagement({
         const terms = assetKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
         const str = [
           ops.projectName, ops.customerName, ops.privateIp, ops.opsVendor, ops.vpnAddress,
-          ops.vpnAccount, ops.bastionAddress, ops.serverAccessAddress, ops.monitoringCoverage,
+          ops.vpnAccount, ops.vpnUserName, ops.bastionAddress, ops.bastionAccount, ops.bastionUserName,
+          ops.personnelAffiliation, ops.vpnNetworkEnv, ops.serverAccessAddress, ops.monitoringCoverage,
           ops.inspectionCycle, ops.changeWindow, ops.networkZone, ops.exposureSurface, ops.remarks,
           ops.cloudVendor, ops.env
         ].filter(Boolean).join(" ").toLowerCase();
@@ -958,10 +998,10 @@ export default function HostManagement({
       regionName: newForm.regionName,
       category: "服务器",
       deviceType: newForm.deviceType,
-      internalWanIp: newForm.internalWanIp || null,
-      eip: newForm.eip || null,
-      vip: newForm.vip || null,
-      publicIp: null,
+      internalWanIp: newForm.internalWanIp || undefined,
+      eip: newForm.eip || undefined,
+      vip: newForm.vip || undefined,
+      publicIp: undefined,
       cpuArch: newForm.cpuArch,
       cpuCores: newForm.cpuCores,
       memoryGb: newForm.memoryGb,
@@ -1480,7 +1520,7 @@ export default function HostManagement({
               📤 导出当前视图 ({activeDimension === 'hardware' ? displayedAssets.length : activeDimension === 'database' ? displayedDatabases.length : activeDimension === 'middleware' ? displayedMiddlewares.length : activeDimension === 'backup' ? displayedBackups.length : displayedOpsRecords.length})
             </button>
 
-            {/* 📑 导出 v351 全套 5 个工作表 */}
+            {/* 📑 导出 v360 全套 5 个工作表 */}
             <button
               type="button"
               onClick={handleExportAllV351}
@@ -1499,9 +1539,9 @@ export default function HostManagement({
                 whiteSpace: "nowrap",
                 boxShadow: "0 1px 3px rgba(34,197,94,0.15)"
               }}
-              title="一键导出包含 02硬件、03数据库、04中间件、05备份、06运维 全套 5 个工作表的标准 v351 Excel 工作簿"
+              title="一键导出包含 02硬件(299台)、03数据库(47)、04中间件(1)、05备份(1)、06运维(81) 全套 5 个工作表的标准 v360 Excel 工作簿"
             >
-              📑 导出 v351 全套 Excel
+              📑 导出 v360 全套 Excel
             </button>
 
             {/* 🌐 IP查询 */}
@@ -1530,6 +1570,61 @@ export default function HostManagement({
             >
               🌐 IP 地址查询
             </button>
+
+            {/* 💾 数据库与程序调取状态徽章 */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "5px 12px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                background: isDbConnected || dataSource === "mysql" ? "rgba(16, 185, 129, 0.1)" : "rgba(59, 130, 246, 0.1)",
+                border: `1px solid ${isDbConnected || dataSource === "mysql" ? "rgba(16, 185, 129, 0.3)" : "rgba(59, 130, 246, 0.3)"}`,
+                color: isDbConnected || dataSource === "mysql" ? "#065f46" : "#1e40af"
+              }}
+              title={isDbConnected ? "当前直连 MySQL 数据库，数据由程序实时调取" : "当前通过后端程序 API 调取 v360 资产库（配置 MYSQL_HOST 环境变量可直连 MySQL）"}
+            >
+              <span style={{ fontSize: 10 }}>{isDbConnected || dataSource === "mysql" ? "🟢" : "🔵"}</span>
+              <span>{isDbConnected || dataSource === "mysql" ? "MySQL 数据库直连" : "程序接口调取 (v360: 299台)"}</span>
+              {lastSyncTime && (
+                <span style={{ fontSize: 11, opacity: 0.75, borderLeft: "1px solid currentColor", paddingLeft: 6, marginLeft: 2 }}>
+                  {lastSyncTime}
+                </span>
+              )}
+            </div>
+
+            {/* 🔄 调取数据按钮 */}
+            {onRefreshApi && (
+              <button
+                type="button"
+                onClick={onRefreshApi}
+                disabled={isApiLoading}
+                style={{
+                  padding: "7px 12px",
+                  background: "linear-gradient(135deg,#f0f9ff,#e0f2fe)",
+                  border: "1px solid #7dd3fc",
+                  borderRadius: 8,
+                  color: "#0369a1",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  cursor: isApiLoading ? "not-allowed" : "pointer",
+                  whiteSpace: "nowrap",
+                  boxShadow: "0 1px 3px rgba(3,105,161,0.1)"
+                }}
+                title="重新通过后端程序调取最新资产数据"
+              >
+                <span style={{ display: "inline-block", transform: isApiLoading ? "rotate(180deg)" : "none", transition: "transform 0.5s" }}>
+                  🔄
+                </span>
+                <span>{isApiLoading ? "调取中..." : "调取数据"}</span>
+              </button>
+            )}
 
             {/* ＋ 录入资产/数据库/中间件/备份/运维 - 动态操作 */}
             <button
@@ -2462,12 +2557,12 @@ export default function HostManagement({
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={{ width: 45 }}>序号</th>
                     <th style={{ width: 170 }}>所属项目 · 客户单位</th>
-                    <th style={{ width: 140 }}>私有业务 IP</th>
-                    <th style={{ width: 170 }}>运维保障厂商</th>
+                    <th style={{ width: 130 }}>私有业务 IP</th>
+                    <th style={{ width: 140 }}>人员归属 · 环境</th>
                     <th style={{ width: 150 }}>VPN接入地址</th>
-                    <th style={{ width: 110 }}>VPN账号</th>
-                    <th style={{ width: 180 }}>堡垒机(JumpServer)</th>
-                    <th style={{ width: 110 }}>堡垒机账号</th>
+                    <th style={{ width: 140 }}>VPN账号 · 使用人</th>
+                    <th style={{ width: 170 }}>堡垒机(JumpServer)</th>
+                    <th style={{ width: 140 }}>堡垒机账号 · 使用人</th>
                     <th style={{ width: 220 }}>访问服务器地址 / 命令</th>
                     <th style={{ width: 80 }}>监控覆盖</th>
                     <th style={{ width: 70 }}>巡检周期</th>
@@ -2496,14 +2591,24 @@ export default function HostManagement({
                         <td style={{ fontFamily: "monospace", fontWeight: 600, color: "#0f172a" }}>
                           {op.privateIp}
                         </td>
-                        <td style={{ fontWeight: 600, color: "#1e293b" }}>
-                          {op.opsVendor}
+                        <td>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{op.personnelAffiliation || op.opsVendor}</div>
+                          <small style={{ color: "#64748b", display: "block" }}>{op.vpnNetworkEnv || "互联网区"}</small>
                         </td>
                         <td style={{ fontFamily: "monospace", color: "#2563eb", fontSize: 11 }}>
                           {op.vpnAddress || "-"}
                         </td>
-                        <td style={{ fontFamily: "monospace", color: "#64748b", fontSize: 11 }}>
-                          {op.vpnAccount || "-"}
+                        <td style={{ fontSize: 11 }}>
+                          <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#1e293b" }}>
+                            {op.vpnAccount || "-"}
+                          </div>
+                          {op.vpnUserName ? (
+                            <div style={{ marginTop: 2, display: "inline-flex", alignItems: "center", gap: 3, background: "#e0f2fe", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                              👤 {op.vpnUserName}
+                            </div>
+                          ) : (
+                            <div style={{ color: "#94a3b8", fontSize: 10, marginTop: 1 }}>未登记使用人</div>
+                          )}
                         </td>
                         <td>
                           <a 
@@ -2515,8 +2620,17 @@ export default function HostManagement({
                             {op.bastionAddress || "-"}
                           </a>
                         </td>
-                        <td style={{ fontFamily: "monospace", color: "#64748b", fontSize: 11 }}>
-                          {op.bastionAccount || "-"}
+                        <td style={{ fontSize: 11 }}>
+                          <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#1e293b" }}>
+                            {op.bastionAccount || "-"}
+                          </div>
+                          {op.bastionUserName ? (
+                            <div style={{ marginTop: 2, display: "inline-flex", alignItems: "center", gap: 3, background: "#ede9fe", color: "#6d28d9", padding: "1px 6px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                              👤 {op.bastionUserName}
+                            </div>
+                          ) : (
+                            <div style={{ color: "#94a3b8", fontSize: 10, marginTop: 1 }}>未登记使用人</div>
+                          )}
                         </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -2966,11 +3080,11 @@ export default function HostManagement({
                       onClick={() => {
                         setNewDbDraft(prev => ({
                           ...prev,
-                          projectName: detailAsset.projectName,
-                          customerName: detailAsset.customerName,
-                          env: detailAsset.env,
-                          cloudVendor: detailAsset.cloudVendor,
-                          regionName: detailAsset.regionName,
+                          projectName: detailAsset.projectName || "",
+                          customerName: detailAsset.customerName || "",
+                          env: detailAsset.env || "生产",
+                          cloudVendor: detailAsset.cloudVendor || "",
+                          regionName: detailAsset.regionName || "",
                           privateIp: detailAsset.privateIp || detailAsset.ip || ""
                         }));
                         setShowAddDbModal(true);
@@ -3032,11 +3146,11 @@ export default function HostManagement({
                       onClick={() => {
                         setNewMwDraft(prev => ({
                           ...prev,
-                          projectName: detailAsset.projectName,
-                          customerName: detailAsset.customerName,
-                          env: detailAsset.env,
-                          cloudVendor: detailAsset.cloudVendor,
-                          regionName: detailAsset.regionName,
+                          projectName: detailAsset.projectName || "",
+                          customerName: detailAsset.customerName || "",
+                          env: detailAsset.env || "生产",
+                          cloudVendor: detailAsset.cloudVendor || "",
+                          regionName: detailAsset.regionName || "",
                           privateIp: detailAsset.privateIp || detailAsset.ip || ""
                         }));
                         setShowAddMwModal(true);
@@ -3097,11 +3211,11 @@ export default function HostManagement({
                       onClick={() => {
                         setNewBkDraft(prev => ({
                           ...prev,
-                          projectName: detailAsset.projectName,
-                          customerName: detailAsset.customerName,
-                          env: detailAsset.env,
-                          cloudVendor: detailAsset.cloudVendor,
-                          regionName: detailAsset.regionName,
+                          projectName: detailAsset.projectName || "",
+                          customerName: detailAsset.customerName || "",
+                          env: detailAsset.env || "生产",
+                          cloudVendor: detailAsset.cloudVendor || "",
+                          regionName: detailAsset.regionName || "",
                           privateIp: detailAsset.privateIp || detailAsset.ip || ""
                         }));
                         setShowAddBkModal(true);
@@ -3160,11 +3274,11 @@ export default function HostManagement({
                       onClick={() => {
                         setNewOpsDraft(prev => ({
                           ...prev,
-                          projectName: detailAsset.projectName,
-                          customerName: detailAsset.customerName,
-                          env: detailAsset.env,
-                          cloudVendor: detailAsset.cloudVendor,
-                          regionName: detailAsset.regionName,
+                          projectName: detailAsset.projectName || "",
+                          customerName: detailAsset.customerName || "",
+                          env: detailAsset.env || "生产",
+                          cloudVendor: detailAsset.cloudVendor || "",
+                          regionName: detailAsset.regionName || "",
                           privateIp: detailAsset.privateIp || detailAsset.ip || ""
                         }));
                         setShowAddOpsModal(true);
@@ -3198,9 +3312,19 @@ export default function HostManagement({
                             <div style={{ background: "#fff", padding: "8px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
                               <span style={{ color: "#64748b", fontWeight: 600, display: "block" }}>VPN 拨号专线:</span>
                               <div style={{ fontFamily: "monospace", color: "#1d4ed8", marginTop: 2 }}>{op.vpnAddress || "-"}</div>
-                              <div style={{ color: "#475569", marginTop: 2 }}>账号: <code style={{ color: "#0f172a" }}>{op.vpnAccount || "-"}</code></div>
+                              <div style={{ color: "#475569", marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <span>账号: <code style={{ color: "#0f172a", fontWeight: 700 }}>{op.vpnAccount || "-"}</code></span>
+                                {op.vpnUserName && (
+                                  <span style={{ background: "#e0f2fe", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                    👤 使用人: {op.vpnUserName}
+                                  </span>
+                                )}
+                              </div>
+                              {op.vpnNetworkEnv && (
+                                <div style={{ color: "#64748b", fontSize: 11, marginTop: 2 }}>网络环境: {op.vpnNetworkEnv}</div>
+                              )}
                               {op.vpnAddress && (
-                                <button type="button" className="btn-secondary" style={{ padding: "1px 6px", fontSize: 10, marginTop: 4 }} onClick={() => copyToClipboard(`${op.vpnAddress} (账号: ${op.vpnAccount})`, "VPN信息")}>
+                                <button type="button" className="btn-secondary" style={{ padding: "1px 6px", fontSize: 10, marginTop: 4 }} onClick={() => copyToClipboard(`${op.vpnAddress} (账号: ${op.vpnAccount}${op.vpnUserName ? ` 使用人: ${op.vpnUserName}` : ""})`, "VPN信息")}>
                                   复制VPN
                                 </button>
                               )}
@@ -3215,9 +3339,16 @@ export default function HostManagement({
                                   </a>
                                 ) : "-"}
                               </div>
-                              <div style={{ color: "#475569", marginTop: 2 }}>账号: <code style={{ color: "#0f172a" }}>{op.bastionAccount || "-"}</code></div>
+                              <div style={{ color: "#475569", marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <span>账号: <code style={{ color: "#0f172a", fontWeight: 700 }}>{op.bastionAccount || "-"}</code></span>
+                                {op.bastionUserName && (
+                                  <span style={{ background: "#ede9fe", color: "#6d28d9", padding: "1px 6px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                    👤 使用人: {op.bastionUserName}
+                                  </span>
+                                )}
+                              </div>
                               {op.bastionAddress && (
-                                <button type="button" className="btn-secondary" style={{ padding: "1px 6px", fontSize: 10, marginTop: 4 }} onClick={() => copyToClipboard(`${op.bastionAddress} (账号: ${op.bastionAccount})`, "堡垒机信息")}>
+                                <button type="button" className="btn-secondary" style={{ padding: "1px 6px", fontSize: 10, marginTop: 4 }} onClick={() => copyToClipboard(`${op.bastionAddress} (账号: ${op.bastionAccount}${op.bastionUserName ? ` 使用人: ${op.bastionUserName}` : ""})`, "堡垒机信息")}>
                                   复制堡垒机
                                 </button>
                               )}
@@ -3308,8 +3439,9 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>* 环境</label>
                   <select value={newForm.env} onChange={e => setNewForm({ ...newForm, env: e.target.value })}>
-                    <option value="生产">生产环境</option>
-                    <option value="测试">测试环境</option>
+                    {EXCEL_ENVIRONMENTS.map(env => (
+                      <option key={env} value={env}>{env}环境</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3318,21 +3450,17 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>* 云厂商</label>
                   <select value={newForm.cloudVendor} onChange={e => setNewForm({ ...newForm, cloudVendor: e.target.value })}>
-                    <option value="联通云">联通云</option>
-                    <option value="首信云">首信云</option>
-                    <option value="国企云">国企云</option>
-                    <option value="太极云">太极云</option>
-                    <option value="阿里云">阿里云</option>
-                    <option value="自建机房">自建机房</option>
+                    {EXCEL_CLOUD_VENDORS.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-field-item">
                   <label>* 设备形态</label>
                   <select value={newForm.deviceType} onChange={e => setNewForm({ ...newForm, deviceType: e.target.value })}>
-                    <option value="虚拟机">云主机 / 虚拟机</option>
-                    <option value="物理机">实体物理服务器</option>
-                    <option value="负载均衡">负载均衡设备</option>
-                    <option value="对象存储">对象存储节点</option>
+                    {EXCEL_DEVICE_TYPES.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3362,8 +3490,9 @@ export default function HostManagement({
                   <label>CPU 架构与核数</label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <select value={newForm.cpuArch} onChange={e => setNewForm({ ...newForm, cpuArch: e.target.value })}>
-                      <option value="x86_64">x86_64</option>
-                      <option value="ARM64">ARM64</option>
+                      {EXCEL_CPU_ARCHS.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
                     </select>
                     <input 
                       type="number" 
@@ -3414,9 +3543,16 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>OS 版本</label>
                   <input 
+                    list="excel-os-versions"
+                    placeholder="从代码表选择或输入，如 麒麟V10 SP3"
                     value={newForm.osVersion} 
                     onChange={e => setNewForm({ ...newForm, osVersion: e.target.value })} 
                   />
+                  <datalist id="excel-os-versions">
+                    {EXCEL_OS_VERSIONS.map(os => (
+                      <option key={os} value={os}>{os}</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div className="form-field-item">
                   <label>远程端口</label>
@@ -3503,6 +3639,49 @@ export default function HostManagement({
                     {currentProjectVpn.vpnNetworkSegment}
                   </code>
                 </div>
+
+                {/* 项目已分配 VPN 账号与使用者明细 */}
+                {(() => {
+                  const projOps = opsRecords.filter(o => o.projectName === currentProject?.name || o.projectId === currentProject?.id);
+                  if (projOps.length === 0) return null;
+                  return (
+                    <div style={{ marginTop: 14, borderTop: "1px dashed #fed7aa", paddingTop: 12 }}>
+                      <span style={{ color: "#9a3412", fontWeight: 700, display: "block", marginBottom: 6 }}>
+                        👥 项目已分配 VPN 账号与使用人名录 ({projOps.length} 人):
+                      </span>
+                      <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #fed7aa", borderRadius: 6, background: "#fff" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                          <thead>
+                            <tr style={{ background: "#ffedd5", color: "#9a3412", textAlign: "left" }}>
+                              <th style={{ padding: "4px 8px" }}>序号</th>
+                              <th style={{ padding: "4px 8px" }}>VPN 账号</th>
+                              <th style={{ padding: "4px 8px" }}>使用人姓名</th>
+                              <th style={{ padding: "4px 8px" }}>网络环境</th>
+                              <th style={{ padding: "4px 8px" }}>堡垒机账号</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {projOps.map((po, idx) => (
+                              <tr key={po.id || idx} style={{ borderBottom: "1px solid #fed7aa" }}>
+                                <td style={{ padding: "4px 8px", color: "#64748b" }}>{idx + 1}</td>
+                                <td style={{ padding: "4px 8px", fontFamily: "monospace", fontWeight: 600 }}>{po.vpnAccount || "-"}</td>
+                                <td style={{ padding: "4px 8px" }}>
+                                  {po.vpnUserName ? (
+                                    <span style={{ background: "#e0f2fe", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+                                      👤 {po.vpnUserName}
+                                    </span>
+                                  ) : "-"}
+                                </td>
+                                <td style={{ padding: "4px 8px", color: "#64748b" }}>{po.vpnNetworkEnv || "互联网区"}</td>
+                                <td style={{ padding: "4px 8px", fontFamily: "monospace", color: "#7c3aed" }}>{po.bastionAccount || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="cmdb-modal-footer">
@@ -3647,14 +3826,20 @@ export default function HostManagement({
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>数据库大类</span>
                     <select
                       value={newDbDraft.dbCategory}
-                      onChange={e => setNewDbDraft(prev => ({ ...prev, dbCategory: e.target.value }))}
+                      onChange={e => {
+                        const nextCat = e.target.value;
+                        const recs = EXCEL_DB_CATEGORY_SOFTWARE_MAP[nextCat];
+                        setNewDbDraft(prev => ({
+                          ...prev,
+                          dbCategory: nextCat,
+                          dbSoftware: (recs && recs.length > 0) ? recs[0] : prev.dbSoftware
+                        }));
+                      }}
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                     >
-                      <option value="关系型 (RDBMS / OLTP)">关系型 (RDBMS / OLTP)</option>
-                      <option value="分析型 (OLAP / 列式)">分析型 (OLAP / 列式)</option>
-                      <option value="键值型 (Key-Value / Cache)">键值型 (Key-Value / Cache)</option>
-                      <option value="文档型 (Document)">文档型 (Document)</option>
-                      <option value="时序型 (Time-Series)">时序型 (Time-Series)</option>
+                      {EXCEL_DB_CATEGORIES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -3666,15 +3851,18 @@ export default function HostManagement({
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                       required
                     >
-                      <option value="达梦数据库 (DM)">达梦数据库 (DM)</option>
-                      <option value="人大金仓 (KingbaseES)">人大金仓 (KingbaseES)</option>
-                      <option value="Oracle 数据库">Oracle 数据库</option>
-                      <option value="TiDB 分布式数据库">TiDB 分布式数据库</option>
-                      <option value="OceanBase 分布式数据库">OceanBase 分布式数据库</option>
-                      <option value="MySQL">MySQL</option>
-                      <option value="MariaDB">MariaDB</option>
-                      <option value="PostgreSQL">PostgreSQL</option>
-                      <option value="Redis">Redis</option>
+                      {EXCEL_DB_CATEGORY_SOFTWARE_MAP[newDbDraft.dbCategory]?.length ? (
+                        <optgroup label={`★ 推荐与【${newDbDraft.dbCategory}】匹配的数据库`}>
+                          {EXCEL_DB_CATEGORY_SOFTWARE_MAP[newDbDraft.dbCategory].map(s => (
+                            <option key={`rec-db-${s}`} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      <optgroup label="📋 Excel 00-代码表全部标准数据库 (共 69 项)">
+                        {EXCEL_DB_SOFTWARES.map(s => (
+                          <option key={`all-db-${s}`} value={s}>{s}</option>
+                        ))}
+                      </optgroup>
                     </select>
                   </label>
 
@@ -3747,10 +3935,9 @@ export default function HostManagement({
                       onChange={e => setNewDbDraft(prev => ({ ...prev, deployMode: e.target.value }))}
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                     >
-                      <option value="单机">单机</option>
-                      <option value="主从读写分离">主从读写分离</option>
-                      <option value="集群 (RAC/主备共享存储)">集群 (RAC/主备共享存储)</option>
-                      <option value="分布式原生多活">分布式原生多活</option>
+                      {EXCEL_DB_DEPLOY_MODES.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -3858,17 +4045,21 @@ export default function HostManagement({
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>中间件类型 *</span>
                     <select
                       value={newMwDraft.mwType}
-                      onChange={e => setNewMwDraft(prev => ({ ...prev, mwType: e.target.value }))}
+                      onChange={e => {
+                        const nextType = e.target.value;
+                        const recs = EXCEL_MW_TYPE_SOFTWARE_MAP[nextType];
+                        setNewMwDraft(prev => ({
+                          ...prev,
+                          mwType: nextType,
+                          mwSoftware: (recs && recs.length > 0) ? recs[0] : prev.mwSoftware
+                        }));
+                      }}
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                       required
                     >
-                      <option value="应用服务器/Java Web 容器">应用服务器/Java Web 容器</option>
-                      <option value="Web服务器/反向代理">Web服务器/反向代理</option>
-                      <option value="消息队列 (MQ)">消息队列 (MQ)</option>
-                      <option value="分布式缓存">分布式缓存</option>
-                      <option value="注册中心/配置中心">注册中心/配置中心</option>
-                      <option value="搜索引擎">搜索引擎</option>
-                      <option value="容器运行时/编排">容器运行时/编排</option>
+                      {EXCEL_MIDDLEWARE_TYPES.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -3880,18 +4071,18 @@ export default function HostManagement({
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                       required
                     >
-                      <option value="TongWeb (东方通)">TongWeb (东方通)</option>
-                      <option value="BES (宝兰德)">BES (宝兰德)</option>
-                      <option value="Tomcat">Tomcat</option>
-                      <option value="Nginx">Nginx</option>
-                      <option value="Kafka">Kafka</option>
-                      <option value="RocketMQ">RocketMQ</option>
-                      <option value="RabbitMQ">RabbitMQ</option>
-                      <option value="Redis">Redis</option>
-                      <option value="Nacos">Nacos</option>
-                      <option value="Zookeeper">Zookeeper</option>
-                      <option value="Elasticsearch">Elasticsearch</option>
-                      <option value="Docker">Docker</option>
+                      {EXCEL_MW_TYPE_SOFTWARE_MAP[newMwDraft.mwType]?.length ? (
+                        <optgroup label={`★ 推荐与【${newMwDraft.mwType}】匹配的软件`}>
+                          {EXCEL_MW_TYPE_SOFTWARE_MAP[newMwDraft.mwType].map(s => (
+                            <option key={`rec-${s}`} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      <optgroup label="📋 Excel 00-代码表全部标准中间件 (共 35 项)">
+                        {EXCEL_MIDDLEWARE_SOFTWARES.map(s => (
+                          <option key={`all-${s}`} value={s}>{s}</option>
+                        ))}
+                      </optgroup>
                     </select>
                   </label>
 
@@ -3928,13 +4119,20 @@ export default function HostManagement({
                   </label>
 
                   <label>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>运行时依赖 (Runtime)</span>
-                    <input
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>应用程序运行环境 (Runtime) *</span>
+                    <select
                       value={newMwDraft.runtime}
                       onChange={e => setNewMwDraft(prev => ({ ...prev, runtime: e.target.value }))}
-                      placeholder="例: OpenJDK 11 / Python 3.9"
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
-                    />
+                      required
+                    >
+                      {EXCEL_APP_RUNTIMES.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                      {newMwDraft.runtime && !EXCEL_APP_RUNTIMES.includes(newMwDraft.runtime as any) && (
+                        <option value={newMwDraft.runtime}>{newMwDraft.runtime} (自定义)</option>
+                      )}
+                    </select>
                   </label>
 
                   <label>
@@ -4058,11 +4256,9 @@ export default function HostManagement({
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                       required
                     >
-                      <option value="数据库">数据库</option>
-                      <option value="操作系统/系统盘">操作系统/系统盘</option>
-                      <option value="业务文件/数据盘">业务文件/数据盘</option>
-                      <option value="对象存储">对象存储</option>
-                      <option value="中间件配置">中间件配置</option>
+                      {EXCEL_BACKUP_TYPES.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -4074,10 +4270,9 @@ export default function HostManagement({
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                       required
                     >
-                      <option value="物理备份">物理备份</option>
-                      <option value="逻辑备份">逻辑备份</option>
-                      <option value="云快照备份">云快照备份</option>
-                      <option value="归档备份">归档备份</option>
+                      {EXCEL_BACKUP_METHODS.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -4089,10 +4284,9 @@ export default function HostManagement({
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
                       required
                     >
-                      <option value="物理+归档">物理+归档</option>
-                      <option value="每日增量+周末全量">每日增量+周末全量</option>
-                      <option value="每日定时快照">每日定时快照</option>
-                      <option value="异地归档备份">异地归档备份</option>
+                      {EXCEL_BACKUP_STRATEGIES.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -4156,12 +4350,15 @@ export default function HostManagement({
                 env: newOpsDraft.env,
                 cloudVendor: newOpsDraft.cloudVendor,
                 regionName: newOpsDraft.regionName,
-                privateIp: newOpsDraft.privateIp,
+                personnelAffiliation: newOpsDraft.personnelAffiliation || "伟仕",
+                vpnNetworkEnv: newOpsDraft.vpnNetworkEnv || "互联网区",
                 opsVendor: newOpsDraft.opsVendor,
                 vpnAddress: newOpsDraft.vpnAddress,
                 vpnAccount: newOpsDraft.vpnAccount,
+                vpnUserName: newOpsDraft.vpnUserName,
                 bastionAddress: newOpsDraft.bastionAddress,
                 bastionAccount: newOpsDraft.bastionAccount,
+                bastionUserName: newOpsDraft.bastionUserName,
                 serverAccessAddress: newOpsDraft.serverAccessAddress || `ssh root@${newOpsDraft.privateIp}`,
                 monitoringCoverage: newOpsDraft.monitoringCoverage,
                 inspectionCycle: newOpsDraft.inspectionCycle,
@@ -4224,6 +4421,32 @@ export default function HostManagement({
                   </label>
 
                   <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>人员归属 / 团队</span>
+                    <input
+                      value={newOpsDraft.personnelAffiliation}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, personnelAffiliation: e.target.value }))}
+                      placeholder="例: 伟仕 / 驻场运维组"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>使用人网络环境</span>
+                    <input
+                      list="excel-regions-ops"
+                      value={newOpsDraft.vpnNetworkEnv}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, vpnNetworkEnv: e.target.value }))}
+                      placeholder="例: 互联网区 / 政务外网区"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                    <datalist id="excel-regions-ops">
+                      {EXCEL_REGION_NAMES.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </datalist>
+                  </label>
+
+                  <label>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>VPN接入地址</span>
                     <input
                       value={newOpsDraft.vpnAddress}
@@ -4244,6 +4467,16 @@ export default function HostManagement({
                   </label>
 
                   <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#2563eb" }}>👤 VPN使用人姓名 *</span>
+                    <input
+                      value={newOpsDraft.vpnUserName}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, vpnUserName: e.target.value }))}
+                      placeholder="例: 翟焕净 / 张三"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderColor: "#93c5fd" }}
+                    />
+                  </label>
+
+                  <label>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>堡垒机(JumpServer)地址</span>
                     <input
                       value={newOpsDraft.bastionAddress}
@@ -4260,6 +4493,16 @@ export default function HostManagement({
                       onChange={e => setNewOpsDraft(prev => ({ ...prev, bastionAccount: e.target.value }))}
                       placeholder="例: ops_admin"
                       style={{ width: "100%", padding: "6px 8px", fontSize: 12 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed" }}>👤 堡垒机使用人姓名</span>
+                    <input
+                      value={newOpsDraft.bastionUserName}
+                      onChange={e => setNewOpsDraft(prev => ({ ...prev, bastionUserName: e.target.value }))}
+                      placeholder="例: 翟焕净 / 张三"
+                      style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderColor: "#c4b5fd" }}
                     />
                   </label>
 
@@ -4385,11 +4628,17 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>* 客户单位名称</label>
                   <input 
-                    placeholder="如：北京市医疗保障局"
+                    list="excel-customers-list"
+                    placeholder="从代码表选择或输入，如：北京市人力资源和社会保障局"
                     value={newProjectForm.customerName}
                     onChange={e => setNewProjectForm({ ...newProjectForm, customerName: e.target.value })}
                     required
                   />
+                  <datalist id="excel-customers-list">
+                    {EXCEL_CUSTOMERS.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div className="form-field-item">
                   <label>* 所属环境</label>
@@ -4397,9 +4646,9 @@ export default function HostManagement({
                     value={newProjectForm.env}
                     onChange={e => setNewProjectForm({ ...newProjectForm, env: e.target.value })}
                   >
-                    <option value="生产">生产环境</option>
-                    <option value="测试">测试环境</option>
-                    <option value="灾备">灾备环境</option>
+                    {EXCEL_ENVIRONMENTS.map(env => (
+                      <option key={env} value={env}>{env}环境</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -4411,23 +4660,25 @@ export default function HostManagement({
                     value={newProjectForm.cloudVendor}
                     onChange={e => setNewProjectForm({ ...newProjectForm, cloudVendor: e.target.value })}
                   >
-                    <option value="联通云">联通云</option>
-                    <option value="首信云">首信云</option>
-                    <option value="国企云">国企云</option>
-                    <option value="太极云">太极云</option>
-                    <option value="阿里云">阿里云</option>
-                    <option value="华为云">华为云</option>
-                    <option value="自建机房">自建机房</option>
+                    {EXCEL_CLOUD_VENDORS.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-field-item">
                   <label>* 部署网络区域</label>
                   <input 
-                    placeholder="如：政务外网区 / DMZ区 / 专网核心区"
+                    list="excel-regions-list"
+                    placeholder="从代码表选择或输入，如：政务外网区"
                     value={newProjectForm.regionName}
                     onChange={e => setNewProjectForm({ ...newProjectForm, regionName: e.target.value })}
                     required
                   />
+                  <datalist id="excel-regions-list">
+                    {EXCEL_REGION_NAMES.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </datalist>
                 </div>
               </div>
 
@@ -4506,9 +4757,9 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>* 环境</label>
                   <select value={editForm.env} onChange={e => setEditForm({ ...editForm, env: e.target.value })}>
-                    <option value="生产">生产环境</option>
-                    <option value="测试">测试环境</option>
-                    <option value="灾备">灾备环境</option>
+                    {EXCEL_ENVIRONMENTS.map(env => (
+                      <option key={env} value={env}>{env}环境</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -4517,22 +4768,17 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>* 云厂商</label>
                   <select value={editForm.cloudVendor} onChange={e => setEditForm({ ...editForm, cloudVendor: e.target.value })}>
-                    <option value="联通云">联通云</option>
-                    <option value="首信云">首信云</option>
-                    <option value="国企云">国企云</option>
-                    <option value="太极云">太极云</option>
-                    <option value="阿里云">阿里云</option>
-                    <option value="华为云">华为云</option>
-                    <option value="自建机房">自建机房</option>
+                    {EXCEL_CLOUD_VENDORS.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-field-item">
                   <label>* 设备形态</label>
                   <select value={editForm.deviceType} onChange={e => setEditForm({ ...editForm, deviceType: e.target.value })}>
-                    <option value="虚拟机">云主机 / 虚拟机</option>
-                    <option value="物理机">实体物理服务器</option>
-                    <option value="负载均衡">负载均衡设备</option>
-                    <option value="对象存储">对象存储节点</option>
+                    {EXCEL_DEVICE_TYPES.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -4577,9 +4823,9 @@ export default function HostManagement({
                   <label>CPU 架构与核数</label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <select value={editForm.cpuArch} onChange={e => setEditForm({ ...editForm, cpuArch: e.target.value })}>
-                      <option value="x86_64">x86_64</option>
-                      <option value="ARM64">ARM64</option>
-                      <option value="LoongArch">LoongArch (龙芯)</option>
+                      {EXCEL_CPU_ARCHS.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
                     </select>
                     <input 
                       type="number" 
@@ -4622,9 +4868,16 @@ export default function HostManagement({
                 <div className="form-field-item">
                   <label>操作系统版本</label>
                   <input 
+                    list="excel-os-versions-edit"
+                    placeholder="从代码表选择或输入，如 麒麟V10 SP3"
                     value={editForm.osVersion} 
                     onChange={e => setEditForm({ ...editForm, osVersion: e.target.value })} 
                   />
+                  <datalist id="excel-os-versions-edit">
+                    {EXCEL_OS_VERSIONS.map(os => (
+                      <option key={os} value={os}>{os}</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div className="form-field-item">
                   <label>内核版本</label>
