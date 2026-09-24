@@ -6,5 +6,4 @@ tests
 scratch
 *.log
 *.tmp
-node-v22.14.0-linux-x64.tar.gz
 autops-deploy.tar.gz

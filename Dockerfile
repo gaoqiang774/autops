@@ -18,6 +18,7 @@ RUN mv /usr/local/node-v22.14.0-linux-x64 /usr/local/node && \
 
 # 复制生产代码、配置与产物
 COPY package.json ./
+COPY server.mjs ./
 COPY dist ./dist
 COPY node_modules ./node_modules
 COPY public ./public
@@ -29,4 +30,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
-CMD ["node", "./node_modules/vinext/dist/cli.js", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node", "server.mjs"]

@@ -45,3 +45,6 @@ parsed_all_devices.json
 parsed_assets_summary.json
 scratch_inspect.py
 信息资产台账*
+*.tar.gz
+*.tar
+

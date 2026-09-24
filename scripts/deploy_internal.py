@@ -17,6 +17,11 @@ import tarfile
 import urllib.request
 import paramiko
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 SERVER_HOST = "140.100.180.88"
 SERVER_PORT = 22
 SERVER_USER = "root"
@@ -48,6 +53,7 @@ def make_deploy_tar():
         "docker-compose.yml",
         ".dockerignore",
         "package.json",
+        "server.mjs",
         "dist",
         "node_modules",
         "app",
@@ -95,9 +101,11 @@ def upload_and_deploy():
     # 远程解压与 Docker 部署
     commands = [
         f"cd {REMOTE_DIR} && tar -xzf {LOCAL_DEPLOY_ARCHIVE}",
-        f"cd {REMOTE_DIR} && docker-compose down || true",
-        f"cd {REMOTE_DIR} && docker-compose up -d --build",
-        f"sleep 5",
+        f"cd {REMOTE_DIR} && sed -i '/node-v22.14.0-linux-x64.tar.gz/d' .dockerignore 2>/dev/null || true",
+        f"cd {REMOTE_DIR} && DOCKER_BUILDKIT=0 docker build -t autops:latest .",
+        f"docker stop autops-app 2>/dev/null; docker rm autops-app 2>/dev/null || true",
+        f"docker run -d --name autops-app --restart unless-stopped -p {CONTAINER_PORT}:3000 -e TZ=Asia/Shanghai -e NODE_ENV=production -e PORT=3000 autops:latest",
+        f"sleep 3",
         f"docker ps --filter name=autops-app",
         f"curl -I -s --connect-timeout 5 http://127.0.0.1:{CONTAINER_PORT} || echo 'HTTP check pending...'"
     ]
@@ -116,7 +124,18 @@ def upload_and_deploy():
     ssh.close()
     log(f"🎉 部署全部完成！访问地址: http://{SERVER_HOST}:{CONTAINER_PORT}")
 
+def sync_to_github():
+    log("🐙 正在同步代码到 GitHub (https://github.com/gaoqiang774/autops.git) ...")
+    os.system("git add .")
+    os.system('git commit -m "chore: auto-sync commit before internal deploy" 2>nul')
+    # 优先使用代理推送，超时或失败回退直连
+    ret = os.system("git -c http.proxy=http://127.0.0.1:10808 -c https.proxy=http://127.0.0.1:10808 push origin main")
+    if ret != 0:
+        os.system("git push origin main")
+    log("✅ GitHub 远程仓库同步完成！")
+
 if __name__ == "__main__":
+    sync_to_github()
     ensure_node_binary()
     make_deploy_tar()
     upload_and_deploy()
