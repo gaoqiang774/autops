@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  autops:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: autops:latest
+    container_name: autops-app
+    restart: unless-stopped
+    ports:
+      - "9020:3000"
+    environment:
+      - TZ=Asia/Shanghai
+      - NODE_ENV=production
+      - PORT=3000
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

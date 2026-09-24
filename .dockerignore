@@ -1,5 +1,10 @@
-node_modules
-.next
-.wrangler
-dist
 .git
+.github
+.agents
+.gemini
+tests
+scratch
+*.log
+*.tmp
+node-v22.14.0-linux-x64.tar.gz
+autops-deploy.tar.gz

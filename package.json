@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
-    "deploy": "vinext build && wrangler deploy --config dist/server/wrangler.json",
+    "deploy": "python scripts/deploy_internal.py",
+    "deploy:cf": "vinext build && wrangler deploy --config dist/server/wrangler.json",
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs && node --test tests/excel_roundtrip.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
