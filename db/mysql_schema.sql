@@ -1,7 +1,7 @@
 -- ==========================================================
 -- AutoOps CMDB 资产管理系统 - 标准 MySQL 数据库表结构
 -- 适配 MySQL 5.7 / 8.0+ (utf8mb4 / InnoDB)
--- 基于《信息资产台账-v360.xlsx》严格建表
+-- 基于《信息资产台账-v361.xlsx》严格建表
 -- ==========================================================
 
 SET NAMES utf8mb4;
@@ -155,7 +155,7 @@ CREATE TABLE `cmdb_backups` (
   INDEX `idx_bk_ip` (`private_ip`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='CMDB-数据备份方案表';
 
--- 6. 运维账号与接入表 (360 完整 81 条)
+-- 6. 运维账号与接入表 (361 完整 81 条)
 DROP TABLE IF EXISTS `cmdb_ops_accounts`;
 CREATE TABLE `cmdb_ops_accounts` (
   `id` VARCHAR(64) NOT NULL COMMENT '运维账号主键ID',

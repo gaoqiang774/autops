@@ -4,7 +4,11 @@ import sys
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
-    wb = openpyxl.load_workbook('信息资产台账-v360.xlsx', data_only=True)
+    import glob
+    excel_candidates = glob.glob('*361*.xlsx') + glob.glob('*360*.xlsx') + glob.glob('*.xlsx')
+    excel_path = excel_candidates[0] if excel_candidates else '信息资产台账-v361.xlsx'
+    print(f"Loading code dict from: {excel_path}")
+    wb = openpyxl.load_workbook(excel_path, data_only=True)
     ws = wb['00-代码表']
     headers = [ws.cell(4, c).value for c in range(1, ws.max_column + 1)]
     dict_data = {}
@@ -46,7 +50,7 @@ def main():
 
     ts_lines = [
         '// ==========================================================================',
-        '// AutoOps CMDB - 核心代码字典 (严格来源于《信息资产台账-v360.xlsx》的【00-代码表】)',
+        '// AutoOps CMDB - 核心代码字典 (严格来源于《信息资产台账-v361.xlsx》的【00-代码表】)',
         '// 全系统所有下拉选择框严格按照 Excel 代码表取数',
         '// ==========================================================================\n'
     ]
