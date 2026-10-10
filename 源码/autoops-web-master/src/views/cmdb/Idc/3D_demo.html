@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高保真三维机房 Demo</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #111; }
+        canvas { display: block; }
+        #info {
+            position: absolute; top: 15px; left: 15px; color: #e0e0e0;
+            background: rgba(10, 10, 10, 0.85); padding: 15px; border-radius: 8px;
+            pointer-events: none; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            min-width: 200px;
+        }
+        #info h3 { margin: 0 0 10px 0; color: #4CAF50; font-size: 1.1em; border-bottom: 1px solid #444; padding-bottom: 8px; }
+        #info p { margin: 5px 0; font-size: 0.9em; color: #bbb; }
+        #info strong { color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>🖥️ 智能机房可视化</h3>
+        <p>左键: 旋转 | 右键: 平移 | 滚轮: 缩放</p>
+        <p>点击机柜: 查看信息</p>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+        // --- 1. AI 端：模拟生成结构化数据 ---
+        const aiGeneratedData = {
+            room: { width: 20, depth: 15, height: 4 },
+            cabinets: [
+                { id: 'A-01', x: -5, z: -3, uHeight: 42, devices: [{name: 'Web Server', u: 1, height: 2}, {name: 'DB Server', u: 5, height: 4}] },
+                { id: 'A-02', x: -2, z: -3, uHeight: 42, devices: [{name: 'Firewall', u: 1, height: 1}, {name: 'Switch', u: 3, height: 1}] },
+                { id: 'B-01', x: 2, z: -3, uHeight: 42, devices: [{name: 'Storage', u: 10, height: 8}] },
+                { id: 'B-02', x: 5, z: -3, uHeight: 42, devices: [] },
+            ]
+        };
+
+        // --- 2. Three.js 端：场景初始化 ---
+        const scene = new THREE.Scene();
+        // 设置一个深灰色背景，避免全黑
+        scene.background = new THREE.Color(0x1a1a1a);
+        // 添加一些雾效，增加纵深感
+        scene.fog = new THREE.Fog(0x1a1a1a, 20, 60);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(12, 8, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        // 开启物理正确的光照
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.1; // 防止相机翻转到地面以下
+
+        // --- 3. 灯光与环境 ---
+        // 环境光，提供基础照明
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        // 主光源，模拟顶灯，产生柔和阴影
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 50;
+        dirLight.shadow.camera.left = -20;
+        dirLight.shadow.camera.right = 20;
+        dirLight.shadow.camera.top = 20;
+        dirLight.shadow.camera.bottom = -20;
+        scene.add(dirLight);
+
+        // 加载 HDR 环境贴图，这是提升质感的关键
+        new RGBELoader()
+            .setPath('https://threejs.org/examples/textures/equirectangular/')
+            .load('royal_esplanade_1k.hdr', function (texture) {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                scene.environment = texture; // 设置为场景环境光
+                // scene.background = texture; // 如果想看到背景，可以取消注释这行
+            });
+
+        // --- 4. 动态生成场景 ---
+        const deviceGroup = new THREE.Group();
+        scene.add(deviceGroup);
+
+        // 创建带网格的地板
+        const floorGeo = new THREE.PlaneGeometry(aiGeneratedData.room.width, aiGeneratedData.room.depth);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0x222222, 
+            roughness: 0.8, 
+            metalness: 0.2 
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(aiGeneratedData.room.width, 20, 0x444444, 0x333333);
+        gridHelper.position.y = 0.01; // 防止和地板重叠闪烁
+        scene.add(gridHelper);
+
+        // 使用 InstancedMesh 批量渲染机柜
+        const cabinetGeo = createCabinetGeometry();
+        // 使用物理材质，模拟金属质感
+        const cabinetMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x444444, 
+            metalness: 0.8, 
+            roughness: 0.3,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.2
+        });
+        const instancedCabinets = new THREE.InstancedMesh(cabinetGeo, cabinetMat, aiGeneratedData.cabinets.length);
+        instancedCabinets.castShadow = true;
+        instancedCabinets.receiveShadow = true;
+        instancedCabinets.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // 允许动态更新
+
+        const dummy = new THREE.Object3D();
+        const cabinetData = []; // 存储每个机柜的数据，用于交互
+
+        aiGeneratedData.cabinets.forEach((cab, index) => {
+            dummy.position.set(cab.x, 1, cab.z);
+            dummy.updateMatrix();
+            instancedCabinets.setMatrixAt(index, dummy.matrix);
+            cabinetData.push(cab);
+        });
+        scene.add(instancedCabinets);
+
+        // 创建设备（服务器等）
+        const devices = [];
+        aiGeneratedData.cabinets.forEach(cab => {
+            cab.devices.forEach(dev => {
+                const devGeo = new THREE.BoxGeometry(0.5, dev.height * 0.044, 0.9);
+                const devMat = new THREE.MeshPhysicalMaterial({
+                    color: 0x111111,
+                    metalness: 0.9,
+                    roughness: 0.2,
+                    emissive: 0x001133, // 微弱的自发光，模拟待机灯
+                    emissiveIntensity: 0.5
+                });
+                const devMesh = new THREE.Mesh(devGeo, devMat);
+
+                const uPosition = (dev.u - 1) * 0.044;
+                devMesh.position.set(cab.x, uPosition + (dev.height * 0.044 / 2), cab.z);
+                
+                // 添加一个指示灯
+                const ledGeo = new THREE.SphereGeometry(0.02, 8, 8);
+                const ledMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const led = new THREE.Mesh(ledGeo, ledMat);
+                led.position.set(0.22, 0, 0.45); // 放在设备前面
+                devMesh.add(led);
+
+                devMesh.userData = { ...dev, cabinetId: cab.id, led: led };
+                deviceGroup.add(devMesh);
+                devices.push(devMesh);
+            });
+        });
+
+        // --- 5. 交互 ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedCabinetId = null;
+        const highlightColor = new THREE.Color(0x00ff88);
+        const defaultColor = new THREE.Color(0x444444);
+
+        window.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(instancedCabinets);
+
+            // 重置上一个选中项的颜色
+            if (selectedCabinetId !== null) {
+                const index = cabinetData.findIndex(c => c.id === selectedCabinetId);
+                instancedCabinets.setColorAt(index, defaultColor);
+                instancedCabinets.instanceColor.needsUpdate = true;
+            }
+
+            if (intersects.length > 0) {
+                const instanceId = intersects[0].instanceId;
+                const cabData = cabinetData[instanceId];
+                selectedCabinetId = cabData.id;
+                
+                // 高亮选中的机柜
+                instancedCabinets.setColorAt(instanceId, highlightColor);
+                instancedCabinets.instanceColor.needsUpdate = true;
+
+                // 显示信息
+                const infoDiv = document.getElementById('info');
+                infoDiv.innerHTML = `
+                    <h3>🖥️ ${cabData.id}</h3>
+                    <p><strong>位置:</strong> X: ${cabData.x.toFixed(1)}, Z: ${cabData.z.toFixed(1)}</p>
+                    <p><strong>规格:</strong> ${cabData.uHeight}U</p>
+                    <p><strong>设备数:</strong> ${cabData.devices.length}</p>
+                `;
+            } else {
+                selectedCabinetId = null;
+                document.getElementById('info').innerHTML = `
+                    <h3>🖥️ 智能机房可视化</h3>
+                    <p>左键: 旋转 | 右键: 平移 | 滚轮: 缩放</p>
+                    <p>点击机柜: 查看信息</p>
+                `;
+            }
+        });
+
+        // --- 6. 动画循环 ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            controls.update();
+
+            // 让设备指示灯闪烁
+            devices.forEach(dev => {
+                if (dev.userData.led) {
+                    // 简单的闪烁逻辑
+                    dev.userData.led.material.color.setHSL(0.3 + 0.1 * Math.sin(time * 2), 1, 0.5 + 0.5 * Math.sin(time * 5 + dev.id));
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口大小自适应
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 辅助函数：创建一个更精细的机柜几何体 ---
+        function createCabinetGeometry() {
+            const shape = new THREE.Shape();
+            const width = 0.6;
+            const depth = 1.0;
+            const frame = 0.02; // 边框厚度
+
+            // 外框
+            shape.moveTo(-width/2, -depth/2);
+            shape.lineTo(width/2, -depth/2);
+            shape.lineTo(width/2, depth/2);
+            shape.lineTo(-width/2, depth/2);
+            shape.lineTo(-width/2, -depth/2);
+
+            // 内框（挖空）
+            const hole = new THREE.Path();
+            hole.moveTo(-width/2 + frame, -depth/2 + frame);
+            hole.lineTo(width/2 - frame, -depth/2 + frame);
+            hole.lineTo(width/2 - frame, depth/2 - frame);
+            hole.lineTo(-width/2 + frame, depth/2 - frame);
+            hole.lineTo(-width/2 + frame, -depth/2 + frame);
+            shape.holes.push(hole);
+
+            const extrudeSettings = { depth: 2, bevelEnabled: false };
+            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            geometry.translate(0, 0, 0); // 居中
+            return geometry;
+        }
+
+    </script>
+</body>
+</html>

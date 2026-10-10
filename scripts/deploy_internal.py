@@ -46,6 +46,13 @@ def ensure_node_binary():
     size_mb = round(os.path.getsize(NODE_TAR_NAME) / (1024 * 1024), 2)
     log(f"✅ 下载完成: {NODE_TAR_NAME} ({size_mb} MB)")
 
+def ensure_build():
+    log("🔨 正在检查并编译生产产物 (npm run build) ...")
+    ret = os.system("npm run build")
+    if ret != 0:
+        raise RuntimeError("前端编译失败！请检查错误后重试。")
+    log("✅ 前端生产产物编译完成！")
+
 def make_deploy_tar():
     log("📦 正在生成本地部署压缩包 autops-deploy.tar.gz ...")
     include_paths = [
@@ -58,7 +65,9 @@ def make_deploy_tar():
         "node_modules",
         "app",
         "public",
-        "信息资产台账-v360.xlsx",
+        "db",
+        "信息资产台账-v363.xlsx",
+        "信息资产台账-v361.xlsx",
         NODE_TAR_NAME
     ]
     with tarfile.open(LOCAL_DEPLOY_ARCHIVE, "w:gz") as tar:
@@ -103,14 +112,17 @@ def upload_and_deploy():
         f"cd {REMOTE_DIR} && tar -xzf {LOCAL_DEPLOY_ARCHIVE}",
         f"cd {REMOTE_DIR} && sed -i '/node-v22.14.0-linux-x64.tar.gz/d' .dockerignore 2>/dev/null || true",
         f"cd {REMOTE_DIR} && DOCKER_BUILDKIT=0 docker build -t autops:latest .",
+        f"docker exec mysql-db mysql -uroot -p123456 -e 'CREATE DATABASE IF NOT EXISTS autops DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' 2>/dev/null || true",
+        f"docker exec -i mysql-db mysql -uroot -p123456 autops < {REMOTE_DIR}/db/init_mysql_v363.sql 2>/dev/null || docker exec -i mysql-db mysql -uroot -p123456 autops < {REMOTE_DIR}/db/init_mysql_v361.sql 2>/dev/null || true",
         f"docker stop autops-app 2>/dev/null; docker rm autops-app 2>/dev/null || true",
-        f"docker run -d --name autops-app --restart unless-stopped -p {CONTAINER_PORT}:3000 -e TZ=Asia/Shanghai -e NODE_ENV=production -e PORT=3000 autops:latest",
+        f"docker run -d --name autops-app --restart unless-stopped -p {CONTAINER_PORT}:3000 -e TZ=Asia/Shanghai -e NODE_ENV=production -e PORT=3000 -e MYSQL_HOST={SERVER_HOST} -e MYSQL_PORT=3306 -e MYSQL_USER=root -e MYSQL_PASSWORD=123456 -e MYSQL_DATABASE=autops autops:latest",
         f"sleep 3",
         f"docker ps --filter name=autops-app",
-        f"curl -I -s --connect-timeout 5 http://127.0.0.1:{CONTAINER_PORT} || echo 'HTTP check pending...'"
+        f"curl -I -s --connect-timeout 5 http://127.0.0.1:{CONTAINER_PORT} || echo 'HTTP check pending...'",
+        f"docker exec mysql-db mysql -uroot -p123456 autops -e 'SELECT \"cmdb_hardware_assets:\" AS tbl, count(*) FROM cmdb_hardware_assets UNION ALL SELECT \"cmdb_databases:\", count(*) FROM cmdb_databases UNION ALL SELECT \"cmdb_ops_accounts:\", count(*) FROM cmdb_ops_accounts;' 2>/dev/null || true"
     ]
 
-    log("🐳 正在远程构建并启动 Docker 容器...")
+    log("🐳 正在远程构建并启动 Docker 容器以及初始化 MySQL 数据...")
     for cmd in commands:
         log(f"   执行: {cmd}")
         stdin, stdout, stderr = ssh.exec_command(cmd, timeout=300)
@@ -135,7 +147,17 @@ def sync_to_github():
     log("✅ GitHub 远程仓库同步完成！")
 
 if __name__ == "__main__":
-    sync_to_github()
+    import argparse
+    parser = argparse.ArgumentParser(description="AutoOps 部署脚本")
+    parser.add_argument("--sync-github", action="store_true", help="是否推送到 GitHub 远程仓库（默认不推送，仅部署到本地内网服务器）")
+    args = parser.parse_args()
+
+    if args.sync_github:
+        sync_to_github()
+    else:
+        log("🔒 本次只部署到本地 140.100.180.88 服务器，跳过 GitHub 同步。")
+
     ensure_node_binary()
+    ensure_build()
     make_deploy_tar()
     upload_and_deploy()

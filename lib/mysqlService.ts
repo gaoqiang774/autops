@@ -19,7 +19,7 @@ import {
 
 export interface CmdbAggregatePayload {
   ok: boolean;
-  source: "mysql" | "v360_seed";
+  source: "mysql" | "v363_seed" | "v361_seed" | "v360_seed";
   isDatabaseConnected: boolean;
   dbHost?: string;
   dbName?: string;
@@ -79,7 +79,7 @@ async function getMysqlPool() {
     }
     return mysqlPool;
   } catch (err) {
-    console.warn("[CMDB MySQL] Could not initialize MySQL pool, falling back to v360 data store:", err);
+    console.warn("[CMDB MySQL] Could not initialize MySQL pool, falling back to v363 data store:", err);
     return null;
   }
 }
@@ -88,7 +88,7 @@ async function getMysqlPool() {
  * Fetch all CMDB assets and records.
  * Priority:
  * 1. If MySQL is configured & healthy -> SELECT from MySQL tables.
- * 2. Fallback -> Return v360 seeded data from cmdbData.ts.
+ * 2. Fallback -> Return v363 seeded data from cmdbData.ts.
  */
 export async function fetchAllCmdbData(): Promise<CmdbAggregatePayload> {
   const pool = await getMysqlPool();
@@ -144,14 +144,14 @@ export async function fetchAllCmdbData(): Promise<CmdbAggregatePayload> {
         lastFetched: new Date().toISOString()
       };
     } catch (dbErr) {
-      console.warn("[CMDB MySQL Query] Query failed, seamlessly falling back to v360 data store:", dbErr);
+      console.warn("[CMDB MySQL Query] Query failed, seamlessly falling back to v363 data store:", dbErr);
     }
   }
 
-  // Fallback to local 360 data (299 assets, 47 databases, 1 middleware, 1 backup, 81 ops)
+  // Fallback to local 363 data (301 assets, 44 databases, 1 middleware, 1 backup, 81 ops)
   return {
     ok: true,
-    source: "v360_seed",
+    source: "v363_seed",
     isDatabaseConnected: false,
     counts: {
       totalAssets: initialPhysicalHosts.length + initialVms.length + initialSwitches.length,
@@ -183,7 +183,7 @@ function mapDbHardwareToPhysical(r: any): PhysicalHost {
   const sysDiskGb = Number(r.sys_disk_gb || 0);
   const dataDiskGb = Number(r.data_disk_gb || 0);
   return {
-    id: r.id || `host-v360-${seq}`,
+    id: r.id || `host-v361-${seq}`,
     assetNo: `SRV-PHY-${seq.toString().padStart(3, "0")}`,
     hostname: r.device_name || "",
     name: r.device_name || "",
@@ -251,10 +251,10 @@ function mapDbHardwareToVm(r: any): VmHost {
   const sysDiskGb = Number(r.sys_disk_gb || 0);
   const dataDiskGb = Number(r.data_disk_gb || 0);
   return {
-    id: r.id || `vm-v360-${seq}`,
+    id: r.id || `vm-v361-${seq}`,
     assetNo: `VM-${seq.toString().padStart(3, "0")}`,
     name: r.device_name || "",
-    physicalHostId: "host-v360-1",
+    physicalHostId: "host-v361-1",
     ip: r.private_ip || "",
     privateIp: r.private_ip || "",
     cpu: `${cpuCores}核`,

@@ -1,0 +1,19 @@
+# SNMP 采集配置示例
+# 将以下配置添加到 config.yaml 文件的 monitor 部分
+
+monitor:
+  victoriametrics:
+    url: "http://8.130.14.34:8428"
+  metrics_push:
+    url: "http://8.130.14.34:8428/api/v1/import/prometheus"
+  agent:
+    heartbeat_server_url: "http://127.0.0.1:8000/api/v1/monitor/agent/heartbeat"
+    heartbeat_token: "agent-heartbeat-token-2024"
+    heartbeat_timeout_seconds: 300
+
+  # SNMP 采集配置(新增)
+  snmp:
+    collect_interval: 60  # 采集间隔(秒), 默认60秒
+    timeout: 5            # SNMP超时时间(秒)
+    retries: 3            # 重试次数
+    concurrent_limit: 10  # 并发采集设备数量限制

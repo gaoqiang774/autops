@@ -23,7 +23,7 @@ COPY dist ./dist
 COPY node_modules ./node_modules
 COPY public ./public
 COPY app ./app
-COPY 信息资产台账-v360.xlsx ./
+COPY 信息资产台账-v361.xlsx ./
 
 EXPOSE 3000
 

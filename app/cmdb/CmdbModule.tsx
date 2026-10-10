@@ -76,7 +76,7 @@ export default function CmdbModule({
   const [channelList, setChannelList] = useState<OpsChannel[]>(initialOpsChannels);
 
   // API & Database Data Fetching State
-  const [dataSource, setDataSource] = useState<"mysql" | "v360_api" | "memory">("v360_api");
+  const [dataSource, setDataSource] = useState<"mysql" | "v363_api" | "v361_api" | "v360_api" | "memory">("v363_api");
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [isApiLoading, setIsApiLoading] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
@@ -111,13 +111,13 @@ export default function CmdbModule({
           if (Array.isArray(payload.opsRecords)) {
             setOpsRecords(payload.opsRecords);
           }
-          setDataSource(json.source || (json.isDatabaseConnected ? "mysql" : "v360_api"));
+          setDataSource(json.source || (json.isDatabaseConnected ? "mysql" : "v363_api"));
           setIsDbConnected(!!(json.isDatabaseConnected || json.isDbConnected));
           setLastSyncTime(new Date().toLocaleTimeString());
         }
       }
     } catch (e) {
-      console.warn("Fetch CMDB data from API failed, using fallback v360 data:", e);
+      console.warn("Fetch CMDB data from API failed, using fallback v363 data:", e);
     } finally {
       setIsApiLoading(false);
     }

@@ -1,0 +1,407 @@
+html, body, #app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.el-card {
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.15) !important;
+}
+
+.el-row {
+    margin-bottom: 5px;
+}
+
+.el-pagination {
+    margin-top: 10px;
+}
+
+/* 统一修复分页选中态：选中页码的背景或局部样式覆盖时，页码数字仍需清晰可见。 */
+.el-pagination .el-pager li {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    line-height: var(--el-pagination-button-height, 32px);
+}
+
+html body .el-pagination .el-pager li.is-active,
+html body .el-pagination.is-background .el-pager li.is-active {
+    position: relative;
+    z-index: 1;
+    background: var(--el-color-primary) !important;
+    border-color: var(--el-color-primary) !important;
+    color: var(--el-color-white) !important;
+    -webkit-text-fill-color: var(--el-color-white);
+}
+
+html body .el-pagination .el-pager li.is-active:hover,
+html body .el-pagination .el-pager li.is-active:focus,
+html body .el-pagination .el-pager li.is-active:focus-visible {
+    color: var(--el-color-white) !important;
+    -webkit-text-fill-color: var(--el-color-white);
+}
+
+/* 🎨 全局按钮样式统一规范 */
+/* 所有按钮圆角边框 */
+.el-button {
+    border-radius: 8px !important;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.el-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.el-button:active {
+    transform: translateY(0);
+}
+
+/* 调整左侧导航菜单间距 - 减少按钮之间的距离 */
+.el-menu-item {
+    height: 45px !important; /* 减少菜单项高度从默认56px到45px */
+    line-height: 45px !important;
+    margin-bottom: 2px !important; /* 添加小的底部间距 */
+}
+
+/* 调整子菜单间距 */
+.el-sub-menu {
+    margin-bottom: 2px !important; /* 减少子菜单间距 */
+}
+
+.el-sub-menu .el-menu-item {
+    height: 40px !important; /* 子菜单项稍微小一些 */
+    line-height: 40px !important;
+    margin-bottom: 1px !important;
+}
+
+/* 调整子菜单标题间距 */
+.el-sub-menu__title {
+    height: 45px !important;
+    line-height: 45px !important;
+}
+
+/* K8s 大编辑弹窗按主内容区居中，避免覆盖左侧导航。 */
+body .k8s-main-content-dialog-modal.el-overlay {
+    left: var(--home-aside-width, 200px);
+    width: calc(100vw - var(--home-aside-width, 200px));
+    transition: left 0.2s ease, width 0.2s ease;
+}
+
+body .k8s-main-content-dialog-modal .el-overlay-dialog {
+    width: 100%;
+}
+
+body .k8s-main-content-dialog-modal .el-dialog {
+    max-width: calc(100% - 48px);
+}
+
+@media (max-width: 768px) {
+    body .k8s-main-content-dialog-modal.el-overlay {
+        left: 0;
+        width: 100vw;
+    }
+
+    body .k8s-main-content-dialog-modal .el-dialog {
+        width: calc(100% - 24px) !important;
+        max-width: calc(100% - 24px);
+    }
+}
+
+/* 容器管理视觉收敛：统一背景、弱化卡片边界，避免页面出现多重分层。 */
+.k8s-module-main {
+    --k8s-flat-page-bg: #f6f8fb;
+    --k8s-flat-surface: #ffffff;
+    --k8s-flat-surface-soft: #f9fbfe;
+    --k8s-flat-border: #e6ebf2;
+    --k8s-flat-border-soft: #edf1f6;
+    background: var(--k8s-flat-page-bg) !important;
+}
+
+.k8s-module-main.k8s-transparent-main {
+    background: var(--home-bg-page-soft) !important;
+}
+
+.k8s-module-main.k8s-transparent-main .k8s-cluster-management,
+.k8s-module-main.k8s-transparent-main .k8s-namespace-management,
+.k8s-module-main.k8s-transparent-main .k8s-nodes-management,
+.k8s-module-main.k8s-transparent-main .k8s-workloads-management,
+.k8s-module-main.k8s-transparent-main .k8s-network-management,
+.k8s-module-main.k8s-transparent-main .k8s-storage-management,
+.k8s-module-main.k8s-transparent-main .k8s-config-management,
+.k8s-module-main.k8s-transparent-main .k8s-events-management,
+.k8s-module-main.k8s-transparent-main .arthas-container,
+.k8s-module-main.k8s-transparent-main .k8s-inspection-page,
+.k8s-module-main.k8s-transparent-main .big-data-page {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+.k8s-module-main .k8s-cluster-management,
+.k8s-module-main .k8s-config-management,
+.k8s-module-main .k8s-events-management,
+.k8s-module-main .k8s-inspection-page,
+.k8s-module-main .k8s-namespace-management,
+.k8s-module-main .k8s-network-management,
+.k8s-module-main .k8s-nodes-management,
+.k8s-module-main .k8s-storage-management,
+.k8s-module-main .k8s-workloads-management,
+.k8s-module-main .k8s-cluster-details,
+.k8s-module-main .node-details-container,
+.k8s-module-main .k8s-monitoring-dashboard,
+.k8s-module-main .k8s-pod-management,
+.k8s-module-main .terminal-container,
+.k8s-module-main .arthas-container {
+    background: var(--k8s-flat-page-bg) !important;
+    background-image: none !important;
+}
+
+.k8s-module-main .page-card,
+.k8s-module-main .config-card,
+.k8s-module-main .events-card,
+.k8s-module-main .namespace-card,
+.k8s-module-main .network-card,
+.k8s-module-main .nodes-card,
+.k8s-module-main .storage-card,
+.k8s-module-main .workloads-card,
+.k8s-module-main .pod-card,
+.k8s-module-main .page-header,
+.k8s-module-main .node-details-header,
+.k8s-module-main .selector-bar,
+.k8s-module-main .content-wrapper {
+    background: var(--k8s-flat-surface) !important;
+    background-image: none !important;
+    border: 1px solid var(--k8s-flat-border) !important;
+    border-radius: 14px !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.k8s-module-main .page-card::before,
+.k8s-module-main .config-card::before,
+.k8s-module-main .events-card::before,
+.k8s-module-main .namespace-card::before,
+.k8s-module-main .network-card::before,
+.k8s-module-main .nodes-card::before,
+.k8s-module-main .storage-card::before,
+.k8s-module-main .workloads-card::before,
+.k8s-module-main .pod-card::before {
+    background: transparent !important;
+    border-bottom-color: var(--k8s-flat-border-soft) !important;
+}
+
+.k8s-module-main .page-hero,
+.k8s-module-main .card-header,
+.k8s-module-main .el-card__header,
+.k8s-module-main .history-header,
+.k8s-module-main .content-header,
+.k8s-module-main .monitoring-card-header {
+    background: transparent !important;
+    background-image: none !important;
+    border-bottom-color: var(--k8s-flat-border-soft) !important;
+    box-shadow: none !important;
+}
+
+.k8s-module-main .search-section,
+.k8s-module-main .table-section,
+.k8s-module-main .detail-section,
+.k8s-module-main .info-section,
+.k8s-module-main .config-type-section,
+.k8s-module-main .storage-type-section,
+.k8s-module-main .workload-type-section,
+.k8s-module-main .network-type-section,
+.k8s-module-main .event-summary-card,
+.k8s-module-main .history-card,
+.k8s-module-main .history-panel,
+.k8s-module-main .info-card,
+.k8s-module-main .full-width-card,
+.k8s-module-main .overview-card,
+.k8s-module-main .stat-card,
+.k8s-module-main .metric-card,
+.k8s-module-main .monitoring-detail-card,
+.k8s-module-main .ai-analysis-hero,
+.k8s-module-main .ai-analysis-input-panel,
+.k8s-module-main .ai-analysis-progress-panel,
+.k8s-module-main .ai-analysis-section,
+.k8s-module-main .container-metric,
+.k8s-module-main .component-item,
+.k8s-module-main .stat-item,
+.k8s-module-main .image-card {
+    background: var(--k8s-flat-surface) !important;
+    background-image: none !important;
+    border-color: var(--k8s-flat-border) !important;
+    box-shadow: none !important;
+}
+
+.k8s-module-main .el-card {
+    background: var(--k8s-flat-surface) !important;
+    border-color: var(--k8s-flat-border) !important;
+    box-shadow: none !important;
+}
+
+.k8s-module-main .el-card__body {
+    background: transparent !important;
+}
+
+.k8s-module-main .el-table {
+    background: var(--k8s-flat-surface) !important;
+    border-color: var(--k8s-flat-border) !important;
+    box-shadow: none !important;
+}
+
+.k8s-module-main .el-table th.el-table__cell {
+    background: var(--k8s-flat-surface-soft) !important;
+    color: #344054 !important;
+}
+
+.k8s-module-main .el-table tr,
+.k8s-module-main .el-table td.el-table__cell {
+    background: var(--k8s-flat-surface) !important;
+}
+
+.k8s-module-main .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+    background: #f8fafc !important;
+}
+
+.k8s-module-main .el-tabs__header,
+.k8s-module-main .el-tabs__nav-wrap,
+.k8s-module-main .tab-content,
+.k8s-module-main .tab-toolbar,
+.k8s-module-main .pagination-wrapper {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+.k8s-module-main .el-input__wrapper,
+.k8s-module-main .el-select__wrapper,
+.k8s-module-main .el-textarea__inner {
+    background: var(--k8s-flat-surface) !important;
+    border-color: var(--k8s-flat-border) !important;
+    box-shadow: 0 0 0 1px var(--k8s-flat-border) inset !important;
+}
+
+.k8s-module-main .el-input__wrapper.is-focus,
+.k8s-module-main .el-select__wrapper.is-focused,
+.k8s-module-main .el-textarea__inner:focus {
+    box-shadow: 0 0 0 1px #8fb4f8 inset !important;
+}
+
+.k8s-module-main .el-button:hover {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* 容器管理交互态收敛：移除按钮/可点击项的蓝色圆角底与焦点光圈。 */
+.k8s-module-main .el-button,
+.k8s-module-main .el-link,
+.k8s-module-main .el-tabs__item,
+.k8s-module-main .el-pagination button,
+.k8s-module-main .el-pager li,
+.k8s-module-main .el-dropdown-menu__item,
+.k8s-module-main .el-menu-item,
+.k8s-module-main .el-sub-menu__title,
+.k8s-module-main .el-radio-button__inner,
+.k8s-module-main .el-check-tag,
+.k8s-module-main [role="button"] {
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.k8s-module-main .el-button.is-link,
+.k8s-module-main .el-button--text,
+.k8s-module-main .el-link,
+.k8s-module-main .el-tabs__item,
+.k8s-module-main .el-pagination button,
+.k8s-module-main .el-pager li,
+.k8s-module-main .el-dropdown-menu__item,
+.k8s-module-main .el-menu-item,
+.k8s-module-main .el-sub-menu__title,
+.k8s-module-main .el-radio-button__inner,
+.k8s-module-main .el-check-tag,
+.k8s-module-main [role="button"] {
+    background-image: none !important;
+}
+
+.k8s-module-main .el-button.is-link:hover,
+.k8s-module-main .el-button.is-link:focus,
+.k8s-module-main .el-button.is-link:focus-visible,
+.k8s-module-main .el-button.is-link:active,
+.k8s-module-main .el-button.is-link.is-focus,
+.k8s-module-main .el-button--text:hover,
+.k8s-module-main .el-button--text:focus,
+.k8s-module-main .el-button--text:focus-visible,
+.k8s-module-main .el-button--text:active,
+.k8s-module-main .el-button--text.is-focus,
+.k8s-module-main .el-link:hover,
+.k8s-module-main .el-link:focus,
+.k8s-module-main .el-link:focus-visible,
+.k8s-module-main .el-link:active,
+.k8s-module-main .el-tabs__item:hover,
+.k8s-module-main .el-tabs__item:focus,
+.k8s-module-main .el-tabs__item:focus-visible,
+.k8s-module-main .el-tabs__item:active,
+.k8s-module-main .el-tabs__item.is-active,
+.k8s-module-main .el-pagination button:hover,
+.k8s-module-main .el-pagination button:focus,
+.k8s-module-main .el-pagination button:focus-visible,
+.k8s-module-main .el-pagination button:active,
+.k8s-module-main .el-pager li:hover,
+.k8s-module-main .el-pager li:focus,
+.k8s-module-main .el-pager li:focus-visible,
+.k8s-module-main .el-pager li:active,
+.k8s-module-main .el-dropdown-menu__item:hover,
+.k8s-module-main .el-dropdown-menu__item:focus,
+.k8s-module-main .el-dropdown-menu__item:focus-visible,
+.k8s-module-main .el-dropdown-menu__item:active,
+.k8s-module-main .el-menu-item:hover,
+.k8s-module-main .el-menu-item:focus,
+.k8s-module-main .el-menu-item:focus-visible,
+.k8s-module-main .el-menu-item:active,
+.k8s-module-main .el-sub-menu__title:hover,
+.k8s-module-main .el-sub-menu__title:focus,
+.k8s-module-main .el-sub-menu__title:focus-visible,
+.k8s-module-main .el-sub-menu__title:active,
+.k8s-module-main .el-radio-button__inner:hover,
+.k8s-module-main .el-radio-button__inner:focus,
+.k8s-module-main .el-radio-button__inner:focus-visible,
+.k8s-module-main .el-radio-button__inner:active,
+.k8s-module-main .el-check-tag:hover,
+.k8s-module-main .el-check-tag:focus,
+.k8s-module-main .el-check-tag:focus-visible,
+.k8s-module-main .el-check-tag:active,
+.k8s-module-main [role="button"]:hover,
+.k8s-module-main [role="button"]:focus,
+.k8s-module-main [role="button"]:focus-visible,
+.k8s-module-main [role="button"]:active {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.k8s-module-main .el-button:focus,
+.k8s-module-main .el-button:focus-visible,
+.k8s-module-main .el-button:active,
+.k8s-module-main .el-button.is-focus,
+.k8s-module-main .el-radio-button__original-radio:focus-visible + .el-radio-button__inner {
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.k8s-module-main .xterm-container,
+.k8s-module-main .terminal-content,
+.k8s-module-main .terminal-placeholder,
+.k8s-module-main .logs-container,
+.k8s-module-main .log-content,
+.k8s-module-main .yaml-container,
+.k8s-module-main .yaml-content,
+.k8s-module-main .yaml-editor-wrapper,
+.k8s-module-main .yaml-editor-container,
+.k8s-module-main .monaco-editor {
+    box-shadow: none !important;
+}

@@ -1,0 +1,105 @@
+# 项目启动端口
+server:
+  address: 0.0.0.0:8001  # 监听所有网络接口
+  # debug模式1111
+  model: debug
+  # release模式
+  enableSwagger: true
+
+# 数据库配置
+db:
+  dialects: mysql
+  host: 127.0.0.1
+  port: 3306
+  db: autoops
+  username: root
+  password: 123456
+  charset: utf8
+  # 最大空闲数
+  maxIdle: 50
+  # 最大连接数
+  maxOpen: 150
+  # 启动时根据模型签名决定是否执行自动迁移
+  # true: 模型有变化时自动建表/改表；无变化时跳过全量扫描
+  autoMigrate: true
+
+# redis配置
+redis:
+  address: 112.74.57.93:6379
+  password: ""
+
+# 图片地址和ip
+imageSettings:
+  # 本地磁盘地址
+  uploadDir: ./upload/
+
+# log日志配置
+log:
+  path: ./log
+  name: sys
+  # 输出到控制台
+  model: console
+  # 输出到文件
+  # model: file
+
+# 日志模块配置
+logtail:
+  # auto: kafka.enabled=true 且 brokers 非空时走 Kafka，否则直连 VictoriaLogs
+  # kafka: 强制走 Kafka，配置缺失应视为错误
+  # direct: 强制直连 VictoriaLogs
+  delivery_mode: "auto"
+  victorialogs:
+    url: "http://112.74.57.93:9428/"
+    timeout_seconds: 10
+  kafka:
+    enabled: true
+    brokers:
+      - "112.74.57.93:9092"    
+    topic: "aiops-logs"
+  vector:
+    image: "crpi-aj3vgoxp9kzh2jx4.cn-hangzhou.personal.cr.aliyuncs.com/zhangfan_k8s/vector:latest-debian"
+    packagePath: "./upload/logtail/vector"
+    disk_buffer_max_size_bytes: 2147483648
+  aggregator:
+    image: "crpi-aj3vgoxp9kzh2jx4.cn-hangzhou.personal.cr.aliyuncs.com/zhangfan_k8s/vector:latest-debian"
+
+# 监控配置
+monitor:
+  victoriametrics:
+    url: "http://112.74.57.93:8428"
+  metrics_push:
+    url: "http://112.74.57.93:8428/api/v1/import/prometheus"
+  agent:
+    version: "2.1.0"
+    version_tag: "v2"
+    heartbeat_server_url: "http://112.74.57.93:8000/api/v1/monitor/agent/heartbeat"
+    heartbeat_token: "agent-heartbeat-token-2024"
+    heartbeat_timeout_seconds: 300
+  webhook:
+    token: "webhook-notify-token-2024"
+
+  #监控中心的采集间隔，单位秒
+  alert_scraper_time: 60
+
+# 企业微信智能机器人 API 插件配置
+wecom:
+  plugin_token: "replace-with-wecom-aiops-plugin-token"
+
+# MCP Server 配置
+mcp:
+  token: "replace-with-aiops-mcp-token"
+
+# Windows Exporter配置
+windows_exporter:
+  # MSI安装包本地URL（从API服务器下载）
+  installer_base_url: "http://112.74.57.93:8000/api/v1/upload/windows_exporter/"
+  # 默认版本
+  default_version: "0.31.3"
+  # 默认端口
+  default_port: 9182
+  # 采集器列表
+  enabled_collectors: "cpu,logical_disk,net,os,system,service,memory,process"
+  # VictoriaMetrics 直写配置，地址统一使用 monitor.metrics_push.url
+  push_mode:
+    enabled: true  # 启用主动推送模式
+    interval: 60   # 推送间隔（秒）

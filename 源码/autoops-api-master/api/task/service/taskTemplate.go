@@ -1,0 +1,243 @@
+package service
+
+import (
+	"dodevops-api/api/cmdb/service"
+	sysmodel "dodevops-api/api/system/model"
+	"dodevops-api/api/task/dao"
+	"dodevops-api/api/task/model"
+	"dodevops-api/common/constant"
+	"dodevops-api/common/result"
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"net/http"
+	"strings"
+)
+
+type TaskServiceInterface interface {
+	CreateTemplate(ctx *gin.Context, template *model.TaskTemplate) *result.Result
+	GetAllTemplates(ctx *gin.Context) *result.Result
+	UpdateTemplate(ctx *gin.Context, template *model.TaskTemplate) *result.Result
+	DeleteTemplate(ctx *gin.Context, id uint) *result.Result
+	GetTemplateByID(ctx *gin.Context, id uint) *result.Result
+	GetTemplateContent(ctx *gin.Context, id uint)
+	GetTemplatesByName(ctx *gin.Context, name string) *result.Result
+	GetTemplatesByType(ctx *gin.Context, templateType int) *result.Result
+}
+
+type TaskService struct {
+	hostSSHService  service.CmdbHostSSHServiceInterface
+	taskTemplateDao dao.TaskTemplateDaoInterface
+}
+
+func NewTaskServiceImpl(
+	hostSSHService service.CmdbHostSSHServiceInterface,
+	taskTemplateDao dao.TaskTemplateDaoInterface,
+
+) *TaskService {
+	return &TaskService{
+		hostSSHService:  hostSSHService,
+		taskTemplateDao: taskTemplateDao,
+	}
+}
+
+func (s *TaskService) CreateTemplate(ctx *gin.Context, template *model.TaskTemplate) *result.Result {
+	if err := validateTemplate(template); err != nil {
+		result.Failed(ctx, http.StatusBadRequest, err.Error())
+		return nil
+	}
+	// 检查模板名称是否已存在
+	existingTemplate, err := s.taskTemplateDao.GetTemplateByExactName(template.Name)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		result.Failed(ctx, http.StatusInternalServerError, "检查模板名称失败")
+		return nil
+	}
+	if existingTemplate != nil {
+		result.Failed(ctx, http.StatusConflict, "模板名称已存在")
+		return nil
+	}
+
+	// 清理Windows换行符，避免跨平台兼容性问题
+	template.Content = strings.ReplaceAll(template.Content, "\r\n", "\n")
+	template.Content = strings.ReplaceAll(template.Content, "\r", "\n")
+
+	// 获取当前用户
+	userObj, exists := ctx.Get(constant.ContextKeyUserObj)
+	if !exists {
+		result.Failed(ctx, http.StatusUnauthorized, "未获取到用户信息")
+		return nil
+	}
+	admin, ok := userObj.(*sysmodel.JwtAdmin)
+	if !ok {
+		result.Failed(ctx, http.StatusUnauthorized, "无效的用户信息格式")
+		return nil
+	}
+	template.CreatedBy = admin.Username
+
+	if err := s.taskTemplateDao.CreateTemplate(template); err != nil {
+		result.Failed(ctx, http.StatusInternalServerError, fmt.Sprintf("创建任务模板失败: %v", err))
+		return nil
+	}
+
+	result.Success(ctx, gin.H{
+		"id":      template.ID,
+		"name":    template.Name,
+		"type":    template.Type,
+		"message": "任务模板创建成功",
+	})
+	return nil
+}
+
+func (s *TaskService) GetAllTemplates(ctx *gin.Context) *result.Result {
+	templates, err := s.taskTemplateDao.GetAllTemplates()
+	if err != nil {
+		result.Failed(ctx, http.StatusInternalServerError, "获取模板列表失败")
+		return nil
+	}
+
+	// 格式化时间
+	var formattedTemplates []gin.H
+	for _, t := range templates {
+		formattedTemplates = append(formattedTemplates, gin.H{
+			"id":        t.ID,
+			"name":      t.Name,
+			"type":      t.Type,
+			"content":   t.Content,
+			"remark":    t.Remark,
+			"createdBy": t.CreatedBy,
+			"updatedBy": t.UpdatedBy,
+			"createdAt": t.CreatedAt.Format("2006-01-02 15:04:05"),
+			"updatedAt": t.UpdatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	result.Success(ctx, formattedTemplates)
+	return nil
+}
+
+func (s *TaskService) UpdateTemplate(ctx *gin.Context, template *model.TaskTemplate) *result.Result {
+	if err := validateTemplate(template); err != nil {
+		result.Failed(ctx, http.StatusBadRequest, err.Error())
+		return nil
+	}
+	// 检查模板是否存在
+	_, err := s.taskTemplateDao.GetTemplateByID(template.ID)
+	if err != nil {
+		result.Failed(ctx, http.StatusNotFound, "模板不存在")
+		return nil
+	}
+	if duplicate, findErr := s.taskTemplateDao.GetTemplateByExactName(template.Name); findErr == nil && duplicate.ID != template.ID {
+		result.Failed(ctx, http.StatusConflict, "模板名称已存在")
+		return nil
+	} else if findErr != nil && findErr != gorm.ErrRecordNotFound {
+		result.Failed(ctx, http.StatusInternalServerError, "检查模板名称失败")
+		return nil
+	}
+
+	// 清理Windows换行符，避免跨平台兼容性问题
+	template.Content = strings.ReplaceAll(template.Content, "\r\n", "\n")
+	template.Content = strings.ReplaceAll(template.Content, "\r", "\n")
+
+	// 获取当前用户
+	userObj, exists := ctx.Get(constant.ContextKeyUserObj)
+	if !exists {
+		result.Failed(ctx, http.StatusUnauthorized, "未获取到用户信息")
+		return nil
+	}
+	admin, ok := userObj.(*sysmodel.JwtAdmin)
+	if !ok {
+		result.Failed(ctx, http.StatusUnauthorized, "无效的用户信息格式")
+		return nil
+	}
+	template.UpdatedBy = admin.Username
+
+	if err := s.taskTemplateDao.UpdateTemplate(template); err != nil {
+		result.Failed(ctx, http.StatusInternalServerError, fmt.Sprintf("更新模板失败: %v", err))
+		return nil
+	}
+	result.Success(ctx, gin.H{
+		"id":      template.ID,
+		"name":    template.Name,
+		"type":    template.Type,
+		"remark":  template.Remark,
+		"message": "模板更新成功",
+	})
+	return nil
+}
+
+func validateTemplate(template *model.TaskTemplate) error {
+	template.Name = strings.TrimSpace(template.Name)
+	if template.Name == "" {
+		return fmt.Errorf("模板名称不能为空")
+	}
+	if template.Type < model.TemplateTypeShell || template.Type > model.TemplateTypeAnsible {
+		return fmt.Errorf("模板类型必须是1、2或3")
+	}
+	if strings.TrimSpace(template.Content) == "" {
+		return fmt.Errorf("模板内容不能为空")
+	}
+	return nil
+}
+
+func (s *TaskService) DeleteTemplate(ctx *gin.Context, id uint) *result.Result {
+	if err := s.taskTemplateDao.DeleteTemplate(id); err != nil {
+		result.Failed(ctx, http.StatusInternalServerError, "删除模板失败")
+		return nil
+	}
+	result.Success(ctx, gin.H{
+		"id":      id,
+		"message": "模板删除成功",
+	})
+	return nil
+}
+
+func (s *TaskService) GetTemplateByID(ctx *gin.Context, id uint) *result.Result {
+	template, err := s.taskTemplateDao.GetTemplateByID(id)
+	if err != nil {
+		result.Failed(ctx, http.StatusNotFound, "模板不存在")
+		return nil
+	}
+
+	// 格式化时间
+	formattedTemplate := gin.H{
+		"id":        template.ID,
+		"name":      template.Name,
+		"type":      template.Type,
+		"content":   template.Content,
+		"remark":    template.Remark,
+		"createdBy": template.CreatedBy,
+		"updatedBy": template.UpdatedBy,
+		"createdAt": template.CreatedAt.Format("2006-01-02 15:04:05"),
+		"updatedAt": template.UpdatedAt.Format("2006-01-02 15:04:05"),
+	}
+	result.Success(ctx, formattedTemplate)
+	return nil
+}
+
+func (s *TaskService) GetTemplateContent(ctx *gin.Context, id uint) {
+	template, err := s.taskTemplateDao.GetTemplateByID(id)
+	if err != nil {
+		ctx.String(http.StatusNotFound, "模板不存在")
+		return
+	}
+	ctx.String(http.StatusOK, template.Content)
+}
+
+func (s *TaskService) GetTemplatesByName(ctx *gin.Context, name string) *result.Result {
+	templates, err := s.taskTemplateDao.GetTemplatesByName(name)
+	if err != nil {
+		result.Failed(ctx, http.StatusInternalServerError, "查询模板失败")
+		return nil
+	}
+	result.Success(ctx, templates)
+	return nil
+}
+
+func (s *TaskService) GetTemplatesByType(ctx *gin.Context, templateType int) *result.Result {
+	templates, err := s.taskTemplateDao.GetTemplatesByType(templateType)
+	if err != nil {
+		result.Failed(ctx, http.StatusInternalServerError, "查询模板失败")
+		return nil
+	}
+	result.Success(ctx, templates)
+	return nil
+}

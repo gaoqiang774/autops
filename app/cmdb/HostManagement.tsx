@@ -96,7 +96,7 @@ interface HostManagementProps {
   onUpdateVm?: (v: VmHost) => void;
   onDeleteUnifiedAsset?: (id: string, kind: "physical" | "vm" | "switch") => void;
   onAddProject?: (p: ProjectGroup) => void;
-  dataSource?: "mysql" | "v360_api" | "memory";
+  dataSource?: "mysql" | "v363_api" | "v361_api" | "v360_api" | "memory";
   isDbConnected?: boolean;
   isApiLoading?: boolean;
   onRefreshApi?: () => void;
@@ -144,7 +144,7 @@ export default function HostManagement({
   onBatchImportBackups,
   onBatchImportOpsRecords,
   onBatchImportMultiDimension,
-  dataSource = "v360_api",
+  dataSource = "v363_api",
   isDbConnected = false,
   isApiLoading = false,
   onRefreshApi,
@@ -190,7 +190,7 @@ export default function HostManagement({
   function handleExportAllV351() {
     const scopeTitle = currentProject ? currentProject.name : "全量项目总览";
     exportAllV351Workbook(displayedAssets, displayedDatabases, displayedMiddlewares, displayedBackups, displayedOpsRecords, scopeTitle);
-    setToastNotice(`✓ 已成功导出《信息资产台账-v351》全套 5 个工作表 Excel！`);
+    setToastNotice(`✓ 已成功导出《信息资产台账-v363》全套 5 个工作表 Excel！`);
     setTimeout(() => setToastNotice(null), 3500);
   }
   const [newSoftDraft, setNewSoftDraft] = useState({
@@ -230,6 +230,10 @@ export default function HostManagement({
   const [assetKeyword, setAssetKeyword] = useState("");
   const [ipSearchInput, setIpSearchInput] = useState("");
   const [ipSearchKeyword, setIpSearchKeyword] = useState("");
+  const [searchCustomer, setSearchCustomer] = useState("全部");
+  const [searchProject, setSearchProject] = useState("全部");
+  const [customerKeyword, setCustomerKeyword] = useState("");
+  const [projectKeyword, setProjectKeyword] = useState("");
   const [deviceTypeFilter, setDeviceTypeFilter] = useState("全部");
   const [xinchuangFilter, setXinchuangFilter] = useState("全部");
   // Advanced multi-condition filter state
@@ -536,12 +540,106 @@ export default function HostManagement({
     );
   }, [detailAsset, channelList]);
 
-  // Unique customers for project sidebar filter
+  // Unique customers across the entire system
   const customerOptions = useMemo(() => {
     const set = new Set<string>();
-    projects.forEach(p => set.add(p.customerName));
-    return Array.from(set);
-  }, [projects]);
+    projects.forEach(p => { if (p.customerName) set.add(p.customerName); });
+    allAssets.forEach(a => { if (a.customerName) set.add(a.customerName); });
+    (databases || []).forEach(d => { if (d.customerName) set.add(d.customerName); });
+    (middlewares || []).forEach(m => { if (m.customerName) set.add(m.customerName); });
+    (backups || []).forEach(b => { if (b.customerName) set.add(b.customerName); });
+    (opsRecords || []).forEach(o => { if (o.customerName) set.add(o.customerName); });
+    return Array.from(set).filter(Boolean).sort();
+  }, [projects, allAssets, databases, middlewares, backups, opsRecords]);
+
+  // All unique project names across the entire system
+  const allProjectNames = useMemo(() => {
+    const set = new Set<string>();
+    projects.forEach(p => { if (p.name) set.add(p.name); });
+    allAssets.forEach(a => { if (a.projectName) set.add(a.projectName); });
+    (databases || []).forEach(d => { if (d.projectName) set.add(d.projectName); });
+    (middlewares || []).forEach(m => { if (m.projectName) set.add(m.projectName); });
+    (backups || []).forEach(b => { if (b.projectName) set.add(b.projectName); });
+    (opsRecords || []).forEach(o => { if (o.projectName) set.add(o.projectName); });
+    return Array.from(set).filter(Boolean).sort();
+  }, [projects, allAssets, databases, middlewares, backups, opsRecords]);
+
+  // Projects available for search (filtered by searchCustomer if selected)
+  const availableProjectsForSearch = useMemo(() => {
+    if (searchCustomer === "全部") {
+      return allProjectNames;
+    }
+    const set = new Set<string>();
+    projects.filter(p => p.customerName === searchCustomer).forEach(p => { if (p.name) set.add(p.name); });
+    allAssets.filter(a => a.customerName === searchCustomer).forEach(a => { if (a.projectName) set.add(a.projectName); });
+    (databases || []).filter(d => d.customerName === searchCustomer).forEach(d => { if (d.projectName) set.add(d.projectName); });
+    (middlewares || []).filter(m => m.customerName === searchCustomer).forEach(m => { if (m.projectName) set.add(m.projectName); });
+    (backups || []).filter(b => b.customerName === searchCustomer).forEach(b => { if (b.projectName) set.add(b.projectName); });
+    (opsRecords || []).filter(o => o.customerName === searchCustomer).forEach(o => { if (o.projectName) set.add(o.projectName); });
+    return Array.from(set).filter(Boolean).sort();
+  }, [searchCustomer, allProjectNames, projects, allAssets, databases, middlewares, backups, opsRecords]);
+
+  function findCustomerForProject(projectName: string): string | null {
+    const p = projects.find(x => x.name === projectName);
+    if (p && p.customerName) return p.customerName;
+    const a = allAssets.find(x => x.projectName === projectName && x.customerName);
+    if (a && a.customerName) return a.customerName;
+    const d = (databases || []).find(x => x.projectName === projectName && x.customerName);
+    if (d && d.customerName) return d.customerName;
+    const m = (middlewares || []).find(x => x.projectName === projectName && x.customerName);
+    if (m && m.customerName) return m.customerName;
+    const b = (backups || []).find(x => x.projectName === projectName && x.customerName);
+    if (b && b.customerName) return b.customerName;
+    const o = (opsRecords || []).find(x => x.projectName === projectName && x.customerName);
+    if (o && o.customerName) return o.customerName;
+    return null;
+  }
+
+  function handleCustomerChange(newCust: string) {
+    setSearchCustomer(newCust);
+    if (newCust !== "全部") {
+      const validProjs = new Set<string>();
+      projects.filter(p => p.customerName === newCust).forEach(p => validProjs.add(p.name));
+      allAssets.filter(a => a.customerName === newCust).forEach(a => { if (a.projectName) validProjs.add(a.projectName); });
+      (databases || []).filter(d => d.customerName === newCust).forEach(d => { if (d.projectName) validProjs.add(d.projectName); });
+      if (searchProject !== "全部" && !validProjs.has(searchProject)) {
+        setSearchProject("全部");
+        setSelectedProjectId("all");
+      }
+      setSelectedCustomerFilter(newCust);
+    } else {
+      setSelectedCustomerFilter("全部");
+    }
+    setCurrentPage(1);
+    setDbPage(1);
+    setMwPage(1);
+    setBkPage(1);
+    setOpsPage(1);
+  }
+
+  function handleProjectChange(newProj: string) {
+    setSearchProject(newProj);
+    if (newProj !== "全部") {
+      const cust = findCustomerForProject(newProj);
+      if (cust && searchCustomer === "全部") {
+        setSearchCustomer(cust);
+        setSelectedCustomerFilter(cust);
+      }
+      const matchedProj = projects.find(p => p.name === newProj);
+      if (matchedProj) {
+        setSelectedProjectId(matchedProj.id);
+      }
+    } else {
+      if (selectedProjectId !== "all") {
+        setSelectedProjectId("all");
+      }
+    }
+    setCurrentPage(1);
+    setDbPage(1);
+    setMwPage(1);
+    setBkPage(1);
+    setOpsPage(1);
+  }
 
   // Filtered projects for left sidebar
   const filteredProjects = useMemo(() => {
@@ -583,6 +681,32 @@ export default function HostManagement({
       // Project filter
       if (selectedProjectId !== "all") {
         if (currentProject && (item.projectName !== currentProject.name && item.projectId !== currentProject.id)) {
+          return false;
+        }
+      }
+
+      // Customer condition filter
+      if (searchCustomer !== "全部" && item.customerName !== searchCustomer) {
+        return false;
+      }
+
+      // Customer fuzzy filter
+      if (customerKeyword.trim()) {
+        const ckw = customerKeyword.trim().toLowerCase();
+        if (!item.customerName || !item.customerName.toLowerCase().includes(ckw)) {
+          return false;
+        }
+      }
+
+      // Project condition filter
+      if (searchProject !== "全部" && item.projectName !== searchProject) {
+        return false;
+      }
+
+      // Project fuzzy filter
+      if (projectKeyword.trim()) {
+        const pkw = projectKeyword.trim().toLowerCase();
+        if (!item.projectName || !item.projectName.toLowerCase().includes(pkw)) {
           return false;
         }
       }
@@ -657,7 +781,7 @@ export default function HostManagement({
 
       return true;
     });
-  }, [allAssets, selectedProjectId, currentProject, deviceTypeFilter, xinchuangFilter, assetKeyword, ipSearchKeyword, filterEnv, filterCloud, filterRegion, filterOsFamily]);
+  }, [allAssets, selectedProjectId, currentProject, searchCustomer, customerKeyword, searchProject, projectKeyword, deviceTypeFilter, xinchuangFilter, assetKeyword, ipSearchKeyword, filterEnv, filterCloud, filterRegion, filterOsFamily]);
   // ── 03-数据库 筛选与分页 ──
   const displayedDatabases = useMemo(() => {
     return (databases || []).filter(db => {
@@ -665,6 +789,20 @@ export default function HostManagement({
         if (currentProject && db.projectName !== currentProject.name && (db as any).projectId !== currentProject.id) {
           return false;
         }
+      }
+      if (searchCustomer !== "全部" && db.customerName !== searchCustomer) {
+        return false;
+      }
+      if (customerKeyword.trim()) {
+        const ckw = customerKeyword.trim().toLowerCase();
+        if (!db.customerName || !db.customerName.toLowerCase().includes(ckw)) return false;
+      }
+      if (searchProject !== "全部" && db.projectName !== searchProject) {
+        return false;
+      }
+      if (projectKeyword.trim()) {
+        const pkw = projectKeyword.trim().toLowerCase();
+        if (!db.projectName || !db.projectName.toLowerCase().includes(pkw)) return false;
       }
       if (ipSearchKeyword.trim()) {
         const targetIp = ipSearchKeyword.trim().toLowerCase();
@@ -682,7 +820,7 @@ export default function HostManagement({
       }
       return true;
     }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
-  }, [databases, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+  }, [databases, selectedProjectId, currentProject, searchCustomer, customerKeyword, searchProject, projectKeyword, ipSearchKeyword, assetKeyword]);
 
   // ── 04-中间件 筛选与分页 ──
   const displayedMiddlewares = useMemo(() => {
@@ -691,6 +829,20 @@ export default function HostManagement({
         if (currentProject && mw.projectName !== currentProject.name && mw.projectId !== currentProject.id) {
           return false;
         }
+      }
+      if (searchCustomer !== "全部" && mw.customerName !== searchCustomer) {
+        return false;
+      }
+      if (customerKeyword.trim()) {
+        const ckw = customerKeyword.trim().toLowerCase();
+        if (!mw.customerName || !mw.customerName.toLowerCase().includes(ckw)) return false;
+      }
+      if (searchProject !== "全部" && mw.projectName !== searchProject) {
+        return false;
+      }
+      if (projectKeyword.trim()) {
+        const pkw = projectKeyword.trim().toLowerCase();
+        if (!mw.projectName || !mw.projectName.toLowerCase().includes(pkw)) return false;
       }
       if (ipSearchKeyword.trim()) {
         const targetIp = ipSearchKeyword.trim().toLowerCase();
@@ -707,7 +859,7 @@ export default function HostManagement({
       }
       return true;
     }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
-  }, [middlewares, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+  }, [middlewares, selectedProjectId, currentProject, searchCustomer, customerKeyword, searchProject, projectKeyword, ipSearchKeyword, assetKeyword]);
 
   // ── 05-备份 筛选与分页 ──
   const displayedBackups = useMemo(() => {
@@ -716,6 +868,20 @@ export default function HostManagement({
         if (currentProject && bk.projectName !== currentProject.name && bk.projectId !== currentProject.id) {
           return false;
         }
+      }
+      if (searchCustomer !== "全部" && bk.customerName !== searchCustomer) {
+        return false;
+      }
+      if (customerKeyword.trim()) {
+        const ckw = customerKeyword.trim().toLowerCase();
+        if (!bk.customerName || !bk.customerName.toLowerCase().includes(ckw)) return false;
+      }
+      if (searchProject !== "全部" && bk.projectName !== searchProject) {
+        return false;
+      }
+      if (projectKeyword.trim()) {
+        const pkw = projectKeyword.trim().toLowerCase();
+        if (!bk.projectName || !bk.projectName.toLowerCase().includes(pkw)) return false;
       }
       if (ipSearchKeyword.trim()) {
         const targetIp = ipSearchKeyword.trim().toLowerCase();
@@ -731,7 +897,7 @@ export default function HostManagement({
       }
       return true;
     }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
-  }, [backups, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+  }, [backups, selectedProjectId, currentProject, searchCustomer, customerKeyword, searchProject, projectKeyword, ipSearchKeyword, assetKeyword]);
 
   // ── 06-运维 筛选与分页 ──
   const displayedOpsRecords = useMemo(() => {
@@ -740,6 +906,20 @@ export default function HostManagement({
         if (currentProject && ops.projectName !== currentProject.name && ops.projectId !== currentProject.id) {
           return false;
         }
+      }
+      if (searchCustomer !== "全部" && ops.customerName !== searchCustomer) {
+        return false;
+      }
+      if (customerKeyword.trim()) {
+        const ckw = customerKeyword.trim().toLowerCase();
+        if (!ops.customerName || !ops.customerName.toLowerCase().includes(ckw)) return false;
+      }
+      if (searchProject !== "全部" && ops.projectName !== searchProject) {
+        return false;
+      }
+      if (projectKeyword.trim()) {
+        const pkw = projectKeyword.trim().toLowerCase();
+        if (!ops.projectName || !ops.projectName.toLowerCase().includes(pkw)) return false;
       }
       if (ipSearchKeyword.trim()) {
         const targetIp = ipSearchKeyword.trim().toLowerCase();
@@ -758,7 +938,7 @@ export default function HostManagement({
       }
       return true;
     }).sort((a, b) => (a.seq || 999) - (b.seq || 999));
-  }, [opsRecords, selectedProjectId, currentProject, ipSearchKeyword, assetKeyword]);
+  }, [opsRecords, selectedProjectId, currentProject, searchCustomer, customerKeyword, searchProject, projectKeyword, ipSearchKeyword, assetKeyword]);
 
   const paginatedDatabases = useMemo(() => {
     const start = (dbPage - 1) * pageSize;
@@ -949,12 +1129,19 @@ export default function HostManagement({
     remarks: "新增项目业务节点"
   });
 
-  // When switching projects, update modal default project
+  // When switching projects, update modal default project and sync search conditions
   function handleSelectProject(pId: string) {
     setSelectedProjectId(pId);
     setCurrentPage(1);
+    setDbPage(1);
+    setMwPage(1);
+    setBkPage(1);
+    setOpsPage(1);
     const p = projects.find(x => x.id === pId);
     if (p) {
+      setSearchProject(p.name);
+      setSearchCustomer(p.customerName);
+      setSelectedCustomerFilter(p.customerName);
       setNewForm(prev => ({
         ...prev,
         projectName: p.name,
@@ -963,6 +1150,10 @@ export default function HostManagement({
         cloudVendor: p.cloudVendor,
         regionName: p.regionName
       }));
+    } else if (pId === "all") {
+      setSearchProject("全部");
+      setSearchCustomer("全部");
+      setSelectedCustomerFilter("全部");
     }
   }
 
@@ -1367,7 +1558,7 @@ export default function HostManagement({
                   {currentProject ? currentProject.code : "ALL"}
                 </span>
                 <h3 style={{ margin: 0, fontSize: 17, color: "#0f172a", whiteSpace: "nowrap" }}>
-                  {currentProject ? currentProject.name : "全部项目总览"}
+                  {currentProject ? currentProject.name : (searchCustomer !== "全部" ? `${searchCustomer} 资产全景` : "全部项目总览")}
                 </h3>
                 {currentProject ? (
                   <span style={{ 
@@ -1390,14 +1581,17 @@ export default function HostManagement({
                     fontWeight: 600,
                     whiteSpace: "nowrap"
                   }}>
-                    全量跨项目全景
+                    {searchCustomer !== "全部" ? "客户专项全景" : "全量跨项目全景"}
                   </span>
                 )}
               </div>
               <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>
                 {currentProject 
                   ? `客户单位: ${currentProject.customerName} · 承载云厂商: ${currentProject.cloudVendor} (${currentProject.regionName})`
-                  : `汇聚 ${projects.length} 个重点项目 · 覆盖联通云、首信云、国企云、太极云、阿里云等多云算力资源`
+                  : (searchCustomer !== "全部"
+                      ? `客户单位: ${searchCustomer} · 汇聚该客户旗下所有项目及资产资源`
+                      : `汇聚 ${projects.length} 个重点项目 · 覆盖联通云、首信云、国企云、太极云、阿里云等多云算力资源`
+                    )
                 }
               </p>
             </div>
@@ -1539,9 +1733,9 @@ export default function HostManagement({
                 whiteSpace: "nowrap",
                 boxShadow: "0 1px 3px rgba(34,197,94,0.15)"
               }}
-              title="一键导出包含 02硬件(299台)、03数据库(47)、04中间件(1)、05备份(1)、06运维(81) 全套 5 个工作表的标准 v360 Excel 工作簿"
+              title="一键导出包含 02硬件(301台)、03数据库(44)、04中间件(1)、05备份(1)、06运维(81) 全套 5 个工作表的标准 v363 Excel 工作簿"
             >
-              📑 导出 v360 全套 Excel
+              📑 导出 v363 全套 Excel
             </button>
 
             {/* 🌐 IP查询 */}
@@ -1585,10 +1779,10 @@ export default function HostManagement({
                 border: `1px solid ${isDbConnected || dataSource === "mysql" ? "rgba(16, 185, 129, 0.3)" : "rgba(59, 130, 246, 0.3)"}`,
                 color: isDbConnected || dataSource === "mysql" ? "#065f46" : "#1e40af"
               }}
-              title={isDbConnected ? "当前直连 MySQL 数据库，数据由程序实时调取" : "当前通过后端程序 API 调取 v360 资产库（配置 MYSQL_HOST 环境变量可直连 MySQL）"}
+              title={isDbConnected ? "当前直连 MySQL 数据库，数据由程序实时调取" : "当前通过后端程序 API 调取 v363 资产库（配置 MYSQL_HOST 环境变量可直连 MySQL）"}
             >
               <span style={{ fontSize: 10 }}>{isDbConnected || dataSource === "mysql" ? "🟢" : "🔵"}</span>
-              <span>{isDbConnected || dataSource === "mysql" ? "MySQL 数据库直连" : "程序接口调取 (v360: 299台)"}</span>
+              <span>{isDbConnected || dataSource === "mysql" ? "MySQL 数据库直连" : "程序接口调取 (v363: 301台)"}</span>
               {lastSyncTime && (
                 <span style={{ fontSize: 11, opacity: 0.75, borderLeft: "1px solid currentColor", paddingLeft: 6, marginLeft: 2 }}>
                   {lastSyncTime}
@@ -1815,14 +2009,60 @@ export default function HostManagement({
           flexDirection: "column",
           gap: 6
         }}>
-          {/* Row 1: main search + quick filters */}
+          {/* Row 1: main search + customer/project conditions + quick filters */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <input
-              placeholder="🔍 搜索任意字段：设备名/项目/客户/IP/系统/信创..."
+              placeholder="🔍 综合搜索：设备名/项目/客户/IP/系统/信创/备注..."
               value={assetKeyword}
               onChange={e => { setAssetKeyword(e.target.value); setCurrentPage(1); }}
-              style={{ flex: "1 1 220px", fontSize: 12, padding: "5px 10px", borderRadius: 6, border: "1.5px solid #93c5fd", outline: "none" }}
+              style={{ flex: "1 1 200px", fontSize: 12, padding: "5px 10px", borderRadius: 6, border: "1.5px solid #93c5fd", outline: "none" }}
             />
+
+            {/* 🏢 客户名称条件筛选 */}
+            <select
+              value={searchCustomer}
+              onChange={e => handleCustomerChange(e.target.value)}
+              style={{
+                fontSize: 12,
+                padding: "5px 8px",
+                borderRadius: 6,
+                border: searchCustomer !== "全部" ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                background: searchCustomer !== "全部" ? "#eff6ff" : "#fff",
+                color: searchCustomer !== "全部" ? "#1d4ed8" : "#334155",
+                fontWeight: searchCustomer !== "全部" ? 600 : 400,
+                maxWidth: 180,
+                cursor: "pointer"
+              }}
+              title="按客户名称精准筛选"
+            >
+              <option value="全部">🏢 全部客户 ({customerOptions.length}家)</option>
+              {customerOptions.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+
+            {/* 📁 项目名称条件筛选 */}
+            <select
+              value={searchProject}
+              onChange={e => handleProjectChange(e.target.value)}
+              style={{
+                fontSize: 12,
+                padding: "5px 8px",
+                borderRadius: 6,
+                border: searchProject !== "全部" ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                background: searchProject !== "全部" ? "#eff6ff" : "#fff",
+                color: searchProject !== "全部" ? "#1d4ed8" : "#334155",
+                fontWeight: searchProject !== "全部" ? 600 : 400,
+                maxWidth: 180,
+                cursor: "pointer"
+              }}
+              title="按项目名称精准筛选"
+            >
+              <option value="全部">📁 全部项目 ({availableProjectsForSearch.length}个)</option>
+              {availableProjectsForSearch.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
 
             {/* IP search */}
             <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -1836,7 +2076,7 @@ export default function HostManagement({
                     setCurrentPage(1);
                   }
                 }}
-                style={{ width: 190, fontSize: 12, padding: "5px 8px" }}
+                style={{ width: 170, fontSize: 12, padding: "5px 8px" }}
               />
               <button
                 type="button"
@@ -1895,18 +2135,21 @@ export default function HostManagement({
               }}
               title="展开多条件高级筛选"
             >
-              ⚙ 高级筛选 {(filterEnv !== "全部" || filterCloud !== "全部" || filterRegion !== "全部" || filterOsFamily !== "全部") && <span style={{ background: "#2563eb", color: "#fff", borderRadius: 8, fontSize: 10, padding: "0 4px" }}>●</span>}
+              ⚙ 高级筛选 {(customerKeyword || projectKeyword || filterEnv !== "全部" || filterCloud !== "全部" || filterRegion !== "全部" || filterOsFamily !== "全部") && <span style={{ background: "#2563eb", color: "#fff", borderRadius: 8, fontSize: 10, padding: "0 4px" }}>●</span>}
             </button>
 
-            {(assetKeyword || ipSearchKeyword || deviceTypeFilter !== "全部" || xinchuangFilter !== "全部" || filterEnv !== "全部" || filterCloud !== "全部" || filterRegion !== "全部" || filterOsFamily !== "全部") && (
+            {(assetKeyword || ipSearchKeyword || searchCustomer !== "全部" || searchProject !== "全部" || customerKeyword || projectKeyword || deviceTypeFilter !== "全部" || xinchuangFilter !== "全部" || filterEnv !== "全部" || filterCloud !== "全部" || filterRegion !== "全部" || filterOsFamily !== "全部") && (
               <button
                 className="btn-secondary"
                 style={{ fontSize: 11, padding: "3px 8px" }}
                 onClick={() => {
                   setAssetKeyword(""); setIpSearchInput(""); setIpSearchKeyword("");
+                  setSearchCustomer("全部"); setSearchProject("全部");
+                  setCustomerKeyword(""); setProjectKeyword("");
+                  setSelectedCustomerFilter("全部"); setSelectedProjectId("all");
                   setDeviceTypeFilter("全部"); setXinchuangFilter("全部");
                   setFilterEnv("全部"); setFilterCloud("全部"); setFilterRegion("全部"); setFilterOsFamily("全部");
-                  setCurrentPage(1);
+                  setCurrentPage(1); setDbPage(1); setMwPage(1); setBkPage(1); setOpsPage(1);
                 }}
               >
                 ✕ 重置全部筛选
@@ -1920,7 +2163,34 @@ export default function HostManagement({
               display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
               paddingTop: 6, borderTop: "1px dashed #e2e8f0"
             }}>
-              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, whiteSpace: "nowrap" }}>多条件筛选：</span>
+              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, whiteSpace: "nowrap" }}>多条件模糊匹配：</span>
+              
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                <input
+                  placeholder="客户模糊匹配..."
+                  value={customerKeyword}
+                  onChange={e => { setCustomerKeyword(e.target.value); setCurrentPage(1); setDbPage(1); setMwPage(1); setBkPage(1); setOpsPage(1); }}
+                  style={{ width: 110, fontSize: 11, padding: "3px 6px", borderRadius: 4, border: customerKeyword ? "1px solid #2563eb" : "1px solid #cbd5e1" }}
+                  title="按客户单位包含的关键字模糊检索"
+                />
+                {customerKeyword && (
+                  <button type="button" onClick={() => setCustomerKeyword("")} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
+                )}
+              </div>
+
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                <input
+                  placeholder="项目模糊匹配..."
+                  value={projectKeyword}
+                  onChange={e => { setProjectKeyword(e.target.value); setCurrentPage(1); setDbPage(1); setMwPage(1); setBkPage(1); setOpsPage(1); }}
+                  style={{ width: 110, fontSize: 11, padding: "3px 6px", borderRadius: 4, border: projectKeyword ? "1px solid #2563eb" : "1px solid #cbd5e1" }}
+                  title="按项目名称包含的关键字模糊检索"
+                />
+                {projectKeyword && (
+                  <button type="button" onClick={() => setProjectKeyword("")} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
+                )}
+              </div>
+
               <select value={filterEnv} onChange={e => { setFilterEnv(e.target.value); setCurrentPage(1); }} style={{ fontSize: 11, padding: "3px 7px" }}>
                 <option value="全部">全部环境</option>
                 <option value="生产">生产环境</option>
@@ -1945,15 +2215,97 @@ export default function HostManagement({
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
-              <span style={{ fontSize: 11, color: "#94a3b8" }}>· 以上条件可叠加组合</span>
+              <span style={{ fontSize: 11, color: "#94a3b8" }}>· 以上所有条件可任意叠加组合</span>
             </div>
           )}
 
-          {/* Row 3: result count + export */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, color: "#64748b" }}>
-              共 <strong style={{ color: "#0f172a" }}>{displayedAssets.length}</strong> 台资产记录
-            </span>
+          {/* Row 3: result count + active tags + export */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: "#64748b" }}>
+                共 <strong style={{ color: "#0f172a" }}>{currentDimTotal}</strong> 条{
+                  activeDimension === "hardware" ? "资产设备"
+                  : activeDimension === "database" ? "数据库"
+                  : activeDimension === "middleware" ? "中间件"
+                  : activeDimension === "backup" ? "备份"
+                  : "运维账号"
+                }记录
+              </span>
+
+              {/* Active filter badges */}
+              {searchCustomer !== "全部" && (
+                <span style={{
+                  fontSize: 11, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe",
+                  padding: "1px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4
+                }}>
+                  <span>🏢 客户: {searchCustomer}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCustomerChange("全部")}
+                    style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 700 }}
+                    title="移除客户条件"
+                  >✕</button>
+                </span>
+              )}
+
+              {searchProject !== "全部" && (
+                <span style={{
+                  fontSize: 11, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0",
+                  padding: "1px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4
+                }}>
+                  <span>📁 项目: {searchProject}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleProjectChange("全部")}
+                    style={{ background: "none", border: "none", color: "#15803d", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 700 }}
+                    title="移除项目条件"
+                  >✕</button>
+                </span>
+              )}
+
+              {projectKeyword && (
+                <span style={{
+                  fontSize: 11, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a",
+                  padding: "1px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4
+                }}>
+                  <span>📁 项目包含: "{projectKeyword}"</span>
+                  <button
+                    type="button"
+                    onClick={() => setProjectKeyword("")}
+                    style={{ background: "none", border: "none", color: "#92400e", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 700 }}
+                  >✕</button>
+                </span>
+              )}
+
+              {customerKeyword && (
+                <span style={{
+                  fontSize: 11, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a",
+                  padding: "1px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4
+                }}>
+                  <span>🏢 客户包含: "{customerKeyword}"</span>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerKeyword("")}
+                    style={{ background: "none", border: "none", color: "#92400e", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 700 }}
+                  >✕</button>
+                </span>
+              )}
+
+              {ipSearchKeyword && (
+                <span style={{
+                  fontSize: 11, background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0",
+                  padding: "1px 8px", borderRadius: 12, display: "inline-flex", alignItems: "center", gap: 4
+                }}>
+                  <span>🌐 IP: {ipSearchKeyword}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setIpSearchInput(""); setIpSearchKeyword(""); }}
+                    style={{ background: "none", border: "none", color: "#065f46", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 700 }}
+                  >✕</button>
+                </span>
+              )}
+            </div>
+
             <button
               type="button"
               className="btn-secondary"

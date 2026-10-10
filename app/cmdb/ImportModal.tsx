@@ -475,10 +475,10 @@ export default function ImportModal({
             <span style={{ fontSize: 20 }}>📥</span>
             <div>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>
-                信息资产台账 Excel 智能导入向导 (支持 v351 五维全表 / 单 Sheet)
+                信息资产台账 Excel 智能导入向导 (支持 v363/v361 五维全表 / 单 Sheet)
               </h3>
               <p style={{ margin: "2px 0 0", fontSize: 11, color: "#bfdbfe" }}>
-                已对齐《信息资产台账-v351》规范 · 自动识别 02硬件、03数据库、04中间件、05备份、06运维五个 Sheet，智能查重与差异对比
+                已对齐《信息资产台账-v363》规范 · 自动识别 02硬件、03数据库、04中间件、05备份、06运维五个 Sheet，智能查重与差异对比
               </p>
             </div>
           </div>
@@ -523,7 +523,7 @@ export default function ImportModal({
                 点击或将《信息资产台账》Excel 文件拖拽至此
               </h4>
               <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>
-                支持完整《信息资产台账-v351.xlsx》（含 02-硬件设备、03-数据库、04-中间件、05-备份、06-运维 5个 Sheet），或任一独立导出的 Sheet 文件
+                支持完整《信息资产台账-v363.xlsx》（含 02-硬件设备、03-数据库、04-中间件、05-备份、06-运维 5个 Sheet），或任一独立导出的 Sheet 文件
               </p>
               {loading && (
                 <div style={{ marginTop: 12, color: "#2563eb", fontSize: 13, fontWeight: 600 }}>

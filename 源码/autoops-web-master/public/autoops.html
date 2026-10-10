@@ -1,0 +1,1331 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#edf3fb">
+  <link rel="icon" type="image/svg+xml" href="./autoops-favicon.svg?v=2">
+  <title>AutoOps 天枢 - 一站式智能运维平台</title>
+  <style>
+    :root {
+      --brand: #4b83ee;
+      --brand-strong: #2e63d5;
+      --brand-soft: #e9f0ff;
+      --cyan: #25a7c7;
+      --green: #2ea97d;
+      --amber: #e6a23c;
+      --red: #e45c66;
+      --purple: #7b6ee7;
+      --ink: #172133;
+      --text: #344054;
+      --muted: #738095;
+      --line: #dce4ef;
+      --line-soft: #e9eef5;
+      --surface: #ffffff;
+      --surface-soft: #f7f9fc;
+      --stage: #dfe7f2;
+      --dark: #101828;
+      --paper-w: 1280px;
+      --paper-h: 720px;
+      --deck-scale: 1;
+      --font-sans: Inter, "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --fs-cover: 68px;
+      --fs-title: 42px;
+      --fs-subtitle: 24px;
+      --fs-section: 18px;
+      --fs-body: 16px;
+      --fs-small: 13px;
+      --fs-label: 11px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --radius-sm: 6px;
+      --radius: 8px;
+      --radius-lg: 14px;
+      --shadow-paper: 0 28px 80px rgba(34, 55, 85, .16);
+      --shadow-ui: 0 10px 28px rgba(50, 77, 118, .09);
+      --ease: cubic-bezier(.22, .72, .2, 1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      background: var(--stage);
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 12%, rgba(255,255,255,.75), transparent 28%),
+        linear-gradient(135deg, #e8edf4 0%, #dce5f0 100%);
+      font-family: var(--font-sans);
+      font-size: var(--fs-body);
+      line-height: 1.5;
+      letter-spacing: 0;
+    }
+
+    button, [contenteditable] { font: inherit; }
+
+    .slide {
+      width: 100%;
+      height: 100vh;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+    }
+
+    .paper-stage {
+      width: var(--paper-w);
+      height: var(--paper-h);
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .paper {
+      width: var(--paper-w);
+      height: var(--paper-h);
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      padding: 46px 58px 42px;
+      transform: scale(var(--deck-scale));
+      transform-origin: top left;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 8% 0%, rgba(255, 243, 225, .72), transparent 30%),
+        radial-gradient(circle at 92% 4%, rgba(215, 239, 255, .82), transparent 34%),
+        linear-gradient(135deg, #fbfcfe 0%, #f4f8fd 100%);
+      border: 1px solid rgba(179, 193, 214, .7);
+      border-radius: 3px;
+      box-shadow: var(--shadow-paper);
+      isolation: isolate;
+    }
+
+    .paper::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: .28;
+      background-image:
+        linear-gradient(rgba(75,131,238,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(75,131,238,.035) 1px, transparent 1px);
+      background-size: 36px 36px;
+      pointer-events: none;
+    }
+
+    .paper-dark {
+      color: #fff;
+      background:
+        radial-gradient(circle at 84% 16%, rgba(75,131,238,.25), transparent 34%),
+        radial-gradient(circle at 16% 88%, rgba(37,167,199,.16), transparent 34%),
+        linear-gradient(135deg, #111b2e 0%, #0d1423 100%);
+      border-color: #1e2a40;
+    }
+
+    .paper-dark::before {
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+    }
+
+    h1, h2, h3, p, blockquote { margin: 0; letter-spacing: 0; }
+    h1 { color: var(--ink); font-size: var(--fs-cover); line-height: 1.08; font-weight: 760; }
+    h2 { color: var(--ink); font-size: var(--fs-title); line-height: 1.16; font-weight: 730; }
+    h3 { color: var(--ink); font-size: var(--fs-section); line-height: 1.32; font-weight: 680; }
+    .paper-dark h1, .paper-dark h2, .paper-dark h3 { color: #fff; }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity .58s var(--ease), transform .58s var(--ease);
+      transition-delay: .05s;
+    }
+    .reveal.d1 { transition-delay: .19s; }
+    .reveal.d2 { transition-delay: .36s; }
+    .slide.is-active .reveal { opacity: 1; transform: translateY(0); }
+
+    [data-editable] {
+      outline: 0 solid transparent;
+      outline-offset: 4px;
+      transition: outline-color .18s ease, background-color .18s ease;
+    }
+    body.editing [data-editable] {
+      outline: 1px dashed var(--amber);
+      background: rgba(230,162,60,.08);
+      cursor: text;
+    }
+
+    .progress-track {
+      position: fixed;
+      z-index: 100;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(50,72,105,.12);
+    }
+    .progress-bar {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--brand), var(--cyan));
+      transform: scaleX(0);
+      transform-origin: left center;
+      transition: transform .24s ease;
+    }
+
+    .nav-dots {
+      position: fixed;
+      z-index: 100;
+      right: 18px;
+      top: 50%;
+      display: grid;
+      gap: 9px;
+      transform: translateY(-50%);
+    }
+    .nav-dot {
+      width: 14px;
+      height: 14px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      position: relative;
+    }
+    .nav-dot::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      background: rgba(52,64,84,.32);
+      border-radius: 50%;
+      transition: inset .18s ease, background-color .18s ease;
+    }
+    .nav-dot:hover::after, .nav-dot:focus-visible::after { background: var(--brand); }
+    .nav-dot.is-active::after { inset: 1px; background: var(--brand); }
+
+    .edit-indicator {
+      position: fixed;
+      z-index: 100;
+      left: 18px;
+      bottom: 18px;
+      width: 10px;
+      height: 10px;
+      opacity: 0;
+      background: transparent;
+      border: 1px solid rgba(52,64,84,.3);
+      transition: opacity .18s ease, background-color .18s ease;
+    }
+    body.editing .edit-indicator { opacity: 1; background: var(--amber); }
+
+    .toast {
+      position: fixed;
+      z-index: 120;
+      left: 50%;
+      bottom: 20px;
+      opacity: 0;
+      padding: 9px 14px;
+      color: #fff;
+      background: var(--dark);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: var(--radius-sm);
+      transform: translate(-50%, 10px);
+      pointer-events: none;
+      font-size: var(--fs-small);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    .slide-topline, .slide-footer {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: var(--fs-label);
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+    .slide-topline {
+      height: 24px;
+      margin-bottom: 22px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .slide-footer {
+      position: absolute;
+      left: 58px;
+      right: 58px;
+      bottom: 24px;
+      font-family: var(--font-mono);
+      font-weight: 500;
+    }
+    .paper-dark .slide-topline, .paper-dark .slide-footer { color: rgba(255,255,255,.55); }
+    .paper-dark .slide-topline { border-color: rgba(255,255,255,.15); }
+
+    .brand-lockup { display: inline-flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 44px;
+      height: 42px;
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .brand-mark span {
+      width: 24px;
+      height: 24px;
+      position: absolute;
+      border-radius: 50%;
+      background: #4b95f9;
+      box-shadow: inset 0 -5px 8px rgba(38,74,145,.18);
+    }
+    .brand-mark span:nth-child(1) { left: 10px; top: 0; }
+    .brand-mark span:nth-child(2) { left: 0; top: 17px; }
+    .brand-mark span:nth-child(3) { right: 0; top: 17px; }
+    .brand-name strong { display: block; color: inherit; font-size: 21px; line-height: 1.1; }
+    .brand-name small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; letter-spacing: 0; }
+    .paper-dark .brand-name small { color: rgba(255,255,255,.55); }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--brand);
+      font-size: var(--fs-label);
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 26px; height: 3px; background: currentColor; }
+
+    .page-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 32px;
+      margin-bottom: 26px;
+    }
+    .page-heading h2 { max-width: 720px; }
+    .page-heading p { width: 370px; color: var(--muted); font-size: 15px; line-height: 1.55; text-align: right; }
+
+    .chip-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 5px 10px;
+      color: #536079;
+      background: #f2f5fa;
+      border: 1px solid #e1e7f0;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .chip.blue { color: var(--brand-strong); background: var(--brand-soft); border-color: #d4e1ff; }
+    .chip.green { color: #227b5e; background: #e8f7f1; border-color: #cceee1; }
+    .chip.amber { color: #9a6612; background: #fff5df; border-color: #f7e2b1; }
+    .chip.red { color: #b33f49; background: #fff0f1; border-color: #f6d5d8; }
+
+    /* Shared UI mockup */
+    .ui-window {
+      overflow: hidden;
+      background: rgba(255,255,255,.96);
+      border: 1px solid #d9e2ef;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-ui);
+    }
+    .ui-window-head {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: #fbfcfe;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .ui-traffic { display: flex; gap: 6px; }
+    .ui-traffic i { width: 7px; height: 7px; display: block; border-radius: 50%; background: #d7deea; }
+    .ui-traffic i:first-child { background: #f08a92; }
+    .ui-window-title { color: #69758a; font-size: 11px; font-weight: 650; }
+    .ui-action { padding: 6px 10px; color: #fff; background: var(--brand); border-radius: 6px; font-size: 11px; font-weight: 650; }
+
+    .shell-layout { display: grid; grid-template-columns: 140px 1fr; min-height: 100%; }
+    .shell-sidebar { padding: 16px 12px; background: #edf3ff; border-right: 1px solid #dce6f5; }
+    .shell-brand-mini { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; font-weight: 750; }
+    .mini-mark { width: 22px; height: 22px; display: grid; place-items: center; color: #fff; background: var(--brand); border-radius: 6px; font-size: 10px; }
+    .shell-menu { margin-top: 19px; display: grid; gap: 5px; }
+    .shell-menu span { padding: 7px 9px; color: #718099; border-radius: 6px; font-size: 10px; }
+    .shell-menu span.active { color: var(--brand-strong); background: #fff; box-shadow: 0 2px 8px rgba(75,131,238,.1); font-weight: 700; }
+    .shell-content { padding: 16px; background: #f7f9fc; }
+    .shell-content-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .shell-content-head strong { color: var(--ink); font-size: 14px; }
+    .shell-content-head small { color: var(--muted); font-size: 9px; }
+
+    .mini-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+    .mini-stat {
+      min-height: 70px;
+      padding: 11px;
+      background: #fff;
+      border: 1px solid #e3e9f2;
+      border-radius: 8px;
+    }
+    .mini-stat span { display: block; color: var(--muted); font-size: 9px; }
+    .mini-stat strong { display: block; margin-top: 7px; color: var(--ink); font-size: 20px; line-height: 1; }
+    .mini-stat small { display: block; margin-top: 7px; color: var(--green); font-size: 8px; }
+
+    .mock-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .mock-table th { height: 34px; color: #7a879b; background: #f7f9fc; border-bottom: 1px solid #e5ebf3; font-size: 9px; font-weight: 650; text-align: left; }
+    .mock-table td { height: 40px; color: #475467; border-bottom: 1px solid #edf1f6; font-size: 10px; }
+    .mock-table th, .mock-table td { padding: 0 10px; }
+    .status-dot { display: inline-flex; align-items: center; gap: 5px; color: var(--green); font-size: 9px; font-weight: 650; }
+    .status-dot::before { content: ""; width: 6px; height: 6px; background: currentColor; border-radius: 50%; }
+    .status-dot.warn { color: var(--amber); }
+    .status-dot.danger { color: var(--red); }
+
+    /* Cover */
+    .cover-paper { padding: 50px 58px; }
+    .cover-layout { height: 100%; display: grid; grid-template-columns: 510px 1fr; gap: 54px; align-items: center; }
+    .cover-copy { position: relative; z-index: 3; }
+    .cover-copy .brand-lockup { margin-bottom: 54px; }
+    .cover-copy h1 { font-size: var(--fs-cover); }
+    .cover-copy h1 span { color: var(--brand); }
+    .cover-copy > p { width: 470px; margin-top: 24px; color: #66748a; font-size: 21px; line-height: 1.55; }
+    .cover-tags { margin-top: 36px; display: flex; gap: 9px; }
+    .cover-tag { padding: 7px 12px; color: #54627a; background: rgba(255,255,255,.72); border: 1px solid #dbe4f0; border-radius: 999px; font-size: 12px; font-weight: 650; }
+    .cover-window { height: 520px; transform: perspective(1500px) rotateY(-4deg) rotateX(1deg); transform-origin: center; }
+    .cover-window .shell-layout { height: 476px; }
+    .cover-panels { display: grid; grid-template-columns: 1.15fr .85fr; gap: 10px; margin-top: 10px; }
+    .cover-chart, .cover-list { height: 205px; padding: 12px; background: #fff; border: 1px solid #e3e9f2; border-radius: 8px; }
+    .mock-chart-title { color: var(--ink); font-size: 10px; font-weight: 700; }
+    .line-chart { height: 114px; display: flex; align-items: flex-end; gap: 8px; margin-top: 17px; padding: 0 7px 12px; border-bottom: 1px solid #e5ebf3; }
+    .line-chart i { flex: 1; display: block; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #6f9df4, #dce8ff); }
+    .cover-list ul { list-style: none; margin: 12px 0 0; padding: 0; }
+    .cover-list li { display: grid; grid-template-columns: 8px 1fr auto; gap: 7px; align-items: center; height: 35px; color: #5a677c; border-bottom: 1px solid #edf1f6; font-size: 9px; }
+    .cover-list li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .cover-list li:nth-child(2)::before { background: var(--amber); }
+    .cover-list li:nth-child(3)::before { background: var(--red); }
+
+    /* Value slide */
+    .value-layout { display: grid; grid-template-columns: 370px 1fr; gap: 56px; margin-top: 34px; }
+    .value-lead { padding-top: 12px; }
+    .value-lead h2 { margin-top: 18px; }
+    .value-lead p { margin-top: 20px; color: var(--muted); font-size: 17px; line-height: 1.65; }
+    .value-metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 44px; border-top: 1px solid var(--line); }
+    .value-metrics div { padding: 16px 14px 0 0; border-right: 1px solid var(--line); }
+    .value-metrics div + div { padding-left: 14px; }
+    .value-metrics div:last-child { border-right: 0; }
+    .value-metrics strong { display: block; color: var(--brand); font-size: 24px; }
+    .value-metrics span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .before-after { display: grid; grid-template-columns: 1fr 72px 1fr; align-items: center; }
+    .state-column { min-height: 390px; padding: 26px; background: rgba(255,255,255,.84); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+    .state-column.after { border-color: #cbdcff; box-shadow: var(--shadow-ui); }
+    .state-label { display: inline-block; margin-bottom: 24px; color: var(--muted); font-size: 11px; font-weight: 760; }
+    .state-column.after .state-label { color: var(--brand); }
+    .state-item { min-height: 72px; padding: 13px 0; border-bottom: 1px solid var(--line-soft); }
+    .state-item:last-child { border-bottom: 0; }
+    .state-item strong { display: block; color: var(--ink); font-size: 15px; }
+    .state-item span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+    .switch-arrow { display: grid; place-items: center; color: var(--brand); font-size: 32px; font-weight: 300; }
+
+    /* Capability map */
+    .capability-orbit { height: 474px; position: relative; margin-top: 8px; }
+    .platform-core {
+      width: 222px;
+      height: 222px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: grid;
+      place-items: center;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      background: #fff;
+      border: 1px solid #cddcf5;
+      border-radius: 50%;
+      box-shadow: 0 18px 45px rgba(67,103,158,.14);
+      z-index: 3;
+    }
+    .platform-core .brand-mark { margin: 0 auto 10px; }
+    .platform-core strong { display: block; color: var(--ink); font-size: 24px; }
+    .platform-core span { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .orbit-ring { position: absolute; left: 50%; top: 50%; border: 1px dashed #c9d6e8; border-radius: 50%; transform: translate(-50%, -50%); }
+    .ring-one { width: 500px; height: 330px; }
+    .ring-two { width: 900px; height: 440px; }
+    .cap-node {
+      width: 178px;
+      min-height: 74px;
+      position: absolute;
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      align-items: center;
+      gap: 11px;
+      padding: 12px;
+      background: rgba(255,255,255,.94);
+      border: 1px solid #dce4ef;
+      border-radius: 10px;
+      box-shadow: 0 8px 22px rgba(56,82,120,.07);
+      z-index: 4;
+    }
+    .cap-icon { width: 38px; height: 38px; display: grid; place-items: center; color: #fff; background: var(--brand); border-radius: 9px; font-family: var(--font-mono); font-size: 10px; font-weight: 760; }
+    .cap-node strong { display: block; color: var(--ink); font-size: 14px; }
+    .cap-node span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.3; }
+    .cap-1 { left: 55px; top: 42px; }
+    .cap-2 { left: 330px; top: 12px; }
+    .cap-3 { right: 330px; top: 12px; }
+    .cap-4 { right: 55px; top: 42px; }
+    .cap-5 { left: 18px; top: 198px; }
+    .cap-6 { right: 18px; top: 198px; }
+    .cap-7 { left: 160px; bottom: 15px; }
+    .cap-8 { left: 50%; bottom: 0; transform: translateX(-50%); }
+    .cap-9 { right: 160px; bottom: 15px; }
+    .cap-2 .cap-icon { background: var(--cyan); }
+    .cap-3 .cap-icon { background: var(--red); }
+    .cap-4 .cap-icon { background: var(--purple); }
+    .cap-5 .cap-icon { background: var(--green); }
+    .cap-6 .cap-icon { background: var(--amber); }
+    .cap-7 .cap-icon { background: #55728f; }
+    .cap-8 .cap-icon { background: #6670d4; }
+    .cap-9 .cap-icon { background: #3f8f91; }
+
+    /* CMDB */
+    .cmdb-layout { display: grid; grid-template-columns: 340px 1fr; gap: 36px; }
+    .feature-copy { padding-top: 12px; }
+    .feature-copy h2 { margin-top: 16px; }
+    .feature-copy > p { margin-top: 17px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+    .feature-list { margin-top: 24px; display: grid; gap: 10px; }
+    .feature-line { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+    .feature-line b { width: 24px; height: 24px; display: grid; place-items: center; color: var(--brand); background: var(--brand-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 9px; }
+    .feature-line strong { display: block; color: var(--ink); font-size: 13px; }
+    .feature-line span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .topology-window { height: 472px; }
+    .topology-body { height: 430px; display: grid; grid-template-columns: 145px 1fr 178px; background: #f8fafd; }
+    .topology-tree { padding: 15px 12px; border-right: 1px solid var(--line-soft); background: #fff; }
+    .tree-title { color: var(--ink); font-size: 10px; font-weight: 700; }
+    .tree-item { margin-top: 10px; padding: 7px 8px; color: #66748a; border-radius: 6px; font-size: 9px; }
+    .tree-item.active { color: var(--brand-strong); background: var(--brand-soft); font-weight: 700; }
+    .topology-canvas { position: relative; overflow: hidden; }
+    .topology-canvas::before { content: ""; position: absolute; inset: 0; opacity: .7; background-image: radial-gradient(#d5deeb 1px, transparent 1px); background-size: 15px 15px; }
+    .topo-node { min-width: 100px; position: absolute; z-index: 2; padding: 9px 10px; background: #fff; border: 1px solid #dbe4f0; border-radius: 8px; box-shadow: 0 5px 12px rgba(47,70,104,.08); font-size: 9px; }
+    .topo-node strong { display: block; color: var(--ink); font-size: 10px; }
+    .topo-node span { display: block; margin-top: 3px; color: var(--muted); }
+    .topo-node::after { content: ""; width: 7px; height: 7px; position: absolute; right: 8px; top: 10px; background: var(--green); border-radius: 50%; }
+    .topo-node.warn::after { background: var(--amber); }
+    .topo-root { left: 175px; top: 32px; border-color: #b9cff7; }
+    .topo-a { left: 52px; top: 135px; }
+    .topo-b { right: 45px; top: 135px; }
+    .topo-c { left: 15px; bottom: 58px; }
+    .topo-d { left: 175px; bottom: 40px; }
+    .topo-e { right: 10px; bottom: 58px; }
+    .topo-line { position: absolute; z-index: 1; height: 1px; background: #aebdd2; transform-origin: left center; }
+    .tl-1 { width: 148px; left: 119px; top: 121px; transform: rotate(-37deg); }
+    .tl-2 { width: 145px; left: 272px; top: 85px; transform: rotate(37deg); }
+    .tl-3 { width: 150px; left: 103px; top: 225px; transform: rotate(41deg); }
+    .tl-4 { width: 115px; left: 225px; top: 230px; transform: rotate(90deg); }
+    .tl-5 { width: 150px; left: 310px; top: 265px; transform: rotate(-40deg); }
+    .topology-side { padding: 14px; background: #fff; border-left: 1px solid var(--line-soft); }
+    .health-score { width: 78px; height: 78px; display: grid; place-items: center; margin: 12px auto 15px; color: var(--green); border: 8px solid #dff4ec; border-top-color: var(--green); border-radius: 50%; font-size: 19px; font-weight: 760; }
+    .side-metric { display: flex; justify-content: space-between; padding: 9px 0; color: var(--muted); border-bottom: 1px solid var(--line-soft); font-size: 9px; }
+    .side-metric b { color: var(--ink); }
+
+    /* K8s */
+    .k8s-grid { display: grid; grid-template-columns: 1fr 285px; gap: 18px; }
+    .workload-window { height: 397px; }
+    .workload-toolbar { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line-soft); }
+    .mock-select, .mock-input { height: 28px; display: flex; align-items: center; padding: 0 9px; color: #7a8799; background: #fff; border: 1px solid #dce4ef; border-radius: 6px; font-size: 9px; }
+    .mock-select { width: 116px; }
+    .mock-input { width: 160px; }
+    .mock-button { height: 28px; display: flex; align-items: center; padding: 0 10px; color: #fff; background: var(--brand); border-radius: 6px; font-size: 9px; font-weight: 650; }
+    .workload-tabs { height: 38px; display: flex; align-items: center; gap: 22px; padding: 0 14px; color: var(--muted); border-bottom: 1px solid var(--line-soft); font-size: 9px; }
+    .workload-tabs span.active { height: 38px; display: flex; align-items: center; color: var(--brand); border-bottom: 2px solid var(--brand); font-weight: 700; }
+    .replicas { display: flex; gap: 3px; }
+    .replicas i { width: 7px; height: 7px; display: block; background: var(--green); border-radius: 2px; }
+    .k8s-aside { display: grid; gap: 12px; }
+    .health-panel, .inspection-panel { padding: 16px; background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 10px; }
+    .panel-title { color: var(--ink); font-size: 12px; font-weight: 700; }
+    .cluster-score { display: flex; align-items: center; gap: 13px; margin-top: 15px; }
+    .score-ring { width: 68px; height: 68px; display: grid; place-items: center; color: var(--green); border: 7px solid #dcf3e9; border-top-color: var(--green); border-right-color: var(--green); border-radius: 50%; font-size: 17px; font-weight: 750; }
+    .cluster-score div span { display: block; color: var(--muted); font-size: 9px; }
+    .cluster-score div strong { display: block; margin-top: 5px; color: var(--ink); font-size: 12px; }
+    .inspection-row { display: grid; grid-template-columns: 1fr 45px; align-items: center; height: 34px; border-bottom: 1px solid var(--line-soft); font-size: 9px; }
+    .inspection-row:last-child { border-bottom: 0; }
+    .inspection-row span { color: var(--muted); }
+    .inspection-row b { color: var(--green); text-align: right; }
+    .inspection-row b.warn { color: var(--amber); }
+    .k8s-caps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 14px; }
+    .k8s-cap { padding: 10px 8px; text-align: center; background: rgba(255,255,255,.8); border: 1px solid var(--line); border-radius: 8px; }
+    .k8s-cap strong { display: block; color: var(--ink); font-size: 11px; }
+    .k8s-cap span { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; }
+
+    /* Logs + alerts */
+    .observe-layout { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; }
+    .log-window { height: 424px; }
+    .query-strip { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line-soft); }
+    .query-field { flex: 1; height: 29px; display: flex; align-items: center; padding: 0 10px; color: #66748a; background: #f9fbfd; border: 1px solid #dbe4ef; border-radius: 6px; font-family: var(--font-mono); font-size: 9px; }
+    .hits-chart { height: 112px; position: relative; padding: 16px 15px 12px; border-bottom: 1px solid var(--line-soft); }
+    .area-chart { height: 70px; display: flex; align-items: flex-end; gap: 3px; }
+    .area-chart i { flex: 1; display: block; min-height: 8px; background: linear-gradient(180deg, rgba(75,131,238,.82), rgba(75,131,238,.1)); border-radius: 2px 2px 0 0; }
+    .log-lines { padding: 9px 14px; font-family: var(--font-mono); }
+    .log-line { display: grid; grid-template-columns: 72px 42px 1fr; gap: 9px; align-items: center; height: 36px; color: #5d6b80; border-bottom: 1px solid #edf1f6; font-size: 8px; }
+    .level { padding: 3px 5px; text-align: center; color: #9a6715; background: #fff4dd; border-radius: 4px; font-family: var(--font-sans); font-weight: 700; }
+    .level.error { color: #b03f49; background: #fff0f1; }
+    .incident-panel { height: 424px; overflow: hidden; background: rgba(255,255,255,.96); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-ui); }
+    .incident-head { padding: 15px 16px; border-bottom: 1px solid var(--line-soft); }
+    .incident-head strong { display: block; color: var(--ink); font-size: 14px; }
+    .incident-head span { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+    .incident-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px; }
+    .incident-summary div { padding: 9px; background: #f8fafd; border: 1px solid #e6ebf3; border-radius: 7px; }
+    .incident-summary span { display: block; color: var(--muted); font-size: 8px; }
+    .incident-summary b { display: block; margin-top: 4px; color: var(--ink); font-size: 13px; }
+    .incident-timeline { padding: 4px 18px 14px; }
+    .timeline-item { min-height: 59px; position: relative; padding: 10px 0 8px 24px; border-left: 1px solid #dce4ef; }
+    .timeline-item::before { content: ""; width: 9px; height: 9px; position: absolute; left: -5px; top: 15px; background: var(--brand); border: 2px solid #fff; border-radius: 50%; }
+    .timeline-item:nth-child(2)::before { background: var(--amber); }
+    .timeline-item:nth-child(3)::before { background: var(--green); }
+    .timeline-item strong { display: block; color: var(--ink); font-size: 10px; }
+    .timeline-item span { display: block; margin-top: 4px; color: var(--muted); font-size: 8px; }
+    .observe-flow { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; color: var(--muted); font-size: 11px; }
+    .observe-flow b { color: var(--brand); }
+
+    /* AI */
+    .ai-layout { display: grid; grid-template-columns: 330px 1fr; gap: 26px; }
+    .ai-copy h2 { margin-top: 16px; }
+    .ai-copy > p { margin-top: 17px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+    .ai-pillars { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ai-pillar { padding: 12px; background: rgba(255,255,255,.8); border: 1px solid var(--line); border-radius: 8px; }
+    .ai-pillar b { display: block; color: var(--brand); font-family: var(--font-mono); font-size: 9px; }
+    .ai-pillar strong { display: block; margin-top: 5px; color: var(--ink); font-size: 12px; }
+    .chat-window { height: 470px; }
+    .chat-shell { height: 428px; display: grid; grid-template-columns: 158px 1fr; }
+    .chat-history { padding: 14px 10px; background: #f3f6fb; border-right: 1px solid var(--line-soft); }
+    .chat-history-title { display: flex; justify-content: space-between; color: var(--ink); font-size: 10px; font-weight: 700; }
+    .history-item { margin-top: 9px; padding: 9px; color: #68758a; border-radius: 6px; font-size: 8px; line-height: 1.4; }
+    .history-item.active { color: var(--brand-strong); background: #fff; box-shadow: 0 3px 10px rgba(75,131,238,.08); }
+    .chat-main { padding: 14px 17px; background: #fff; }
+    .chat-topic { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); }
+    .chat-topic strong { color: var(--ink); font-size: 12px; }
+    .chat-topic span { color: var(--muted); font-size: 8px; }
+    .user-bubble { width: 66%; margin: 16px 0 0 auto; padding: 10px 12px; color: #fff; background: var(--brand); border-radius: 9px 9px 2px 9px; font-size: 9px; }
+    .assistant-answer { margin-top: 15px; padding: 13px; background: #f7f9fc; border: 1px solid #e4eaf2; border-radius: 9px; }
+    .assistant-answer > strong { display: block; color: var(--ink); font-size: 10px; }
+    .evidence-list { margin-top: 9px; display: grid; gap: 6px; }
+    .evidence-row { display: grid; grid-template-columns: 62px 1fr auto; gap: 8px; align-items: center; padding: 7px 8px; background: #fff; border: 1px solid #e7ebf2; border-radius: 6px; font-size: 8px; }
+    .evidence-row b { color: var(--brand); }
+    .evidence-row span { color: #5c697d; }
+    .evidence-row i { color: var(--green); font-style: normal; }
+    .ai-action-card { margin-top: 9px; padding: 10px; background: #fffaf0; border: 1px solid #f3dfb6; border-radius: 7px; }
+    .ai-action-card strong { color: #805817; font-size: 9px; }
+    .ai-action-card div { display: flex; justify-content: space-between; margin-top: 6px; color: #8b6d38; font-size: 8px; }
+    .chat-input { height: 35px; display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 10px; color: #9aa4b2; border: 1px solid #dbe4ef; border-radius: 7px; font-size: 8px; }
+    .send-dot { width: 22px; height: 22px; display: grid; place-items: center; color: #fff; background: var(--brand); border-radius: 6px; }
+
+    /* DB */
+    .db-layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+    .review-window { height: 414px; }
+    .review-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; background: #f8fafd; border-bottom: 1px solid var(--line-soft); }
+    .review-stat { padding: 8px; background: #fff; border: 1px solid #e4eaf2; border-radius: 7px; }
+    .review-stat span { display: block; color: var(--muted); font-size: 8px; }
+    .review-stat strong { display: block; margin-top: 4px; color: var(--ink); font-size: 14px; }
+    .review-table td { height: 43px; }
+    .ticket-type { color: var(--brand); font-weight: 700; }
+    .workflow-panel { height: 414px; padding: 18px; background: rgba(255,255,255,.96); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-ui); }
+    .workflow-panel h3 { font-size: 15px; }
+    .workflow-sub { margin-top: 4px; color: var(--muted); font-size: 9px; }
+    .approval-flow { margin-top: 17px; }
+    .approval-step { min-height: 58px; display: grid; grid-template-columns: 26px 1fr auto; gap: 9px; align-items: start; position: relative; }
+    .approval-step::after { content: ""; width: 1px; height: 31px; position: absolute; left: 12px; top: 27px; background: #d8e1ed; }
+    .approval-step:last-child::after { display: none; }
+    .approval-num { width: 25px; height: 25px; display: grid; place-items: center; color: #fff; background: var(--brand); border-radius: 50%; font-size: 8px; font-weight: 700; }
+    .approval-step.done .approval-num { background: var(--green); }
+    .approval-step.warn .approval-num { background: var(--amber); }
+    .approval-step strong { display: block; color: var(--ink); font-size: 10px; }
+    .approval-step span { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; }
+    .approval-step em { color: var(--green); font-size: 8px; font-style: normal; }
+    .rollback-box { margin-top: 10px; padding: 11px; background: #f7f9fc; border: 1px solid #e3e9f2; border-radius: 7px; }
+    .rollback-box strong { display: block; color: var(--ink); font-size: 10px; }
+    .rollback-box span { display: block; margin-top: 4px; color: var(--muted); font-size: 8px; }
+    .db-caps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 13px; }
+
+    /* Cost */
+    .cost-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
+    .cost-copy h2 { margin-top: 16px; }
+    .cost-copy > p { margin-top: 17px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+    .cost-benefits { margin-top: 26px; display: grid; gap: 9px; }
+    .cost-benefit { padding: 12px 14px; background: rgba(255,255,255,.82); border-left: 3px solid var(--brand); }
+    .cost-benefit:nth-child(2) { border-color: var(--green); }
+    .cost-benefit:nth-child(3) { border-color: var(--amber); }
+    .cost-benefit strong { display: block; color: var(--ink); font-size: 12px; }
+    .cost-benefit span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .cost-window { height: 460px; }
+    .cost-dashboard { padding: 13px; background: #f7f9fc; }
+    .cost-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .cost-metric { padding: 11px; background: #fff; border: 1px solid #e4eaf2; border-radius: 7px; }
+    .cost-metric span { display: block; color: var(--muted); font-size: 8px; }
+    .cost-metric strong { display: block; margin-top: 4px; color: var(--ink); font-size: 16px; }
+    .cost-metric small { display: block; margin-top: 5px; color: var(--green); font-size: 7px; }
+    .cost-charts { display: grid; grid-template-columns: 1.2fr .8fr; gap: 9px; margin-top: 9px; }
+    .cost-chart { height: 245px; padding: 12px; background: #fff; border: 1px solid #e4eaf2; border-radius: 7px; }
+    .trend-graph { height: 155px; position: relative; margin-top: 17px; border-left: 1px solid #e4eaf2; border-bottom: 1px solid #e4eaf2; }
+    .trend-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 115px; opacity: .85; clip-path: polygon(0 77%, 17% 60%, 34% 69%, 50% 29%, 67% 44%, 84% 13%, 100% 28%, 100% 100%, 0 100%); background: linear-gradient(180deg, rgba(75,131,238,.42), rgba(75,131,238,.04)); }
+    .trend-line { position: absolute; inset: 0; }
+    .trend-line i { width: 7px; height: 7px; position: absolute; background: var(--brand); border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px var(--brand); }
+    .trend-line i:nth-child(1) { left: 0; top: 116px; }
+    .trend-line i:nth-child(2) { left: 16%; top: 92px; }
+    .trend-line i:nth-child(3) { left: 33%; top: 102px; }
+    .trend-line i:nth-child(4) { left: 49%; top: 44px; }
+    .trend-line i:nth-child(5) { left: 66%; top: 66px; }
+    .trend-line i:nth-child(6) { left: 83%; top: 19px; }
+    .trend-line i:nth-child(7) { right: 0; top: 41px; }
+    .donut-wrap { height: 165px; display: grid; grid-template-columns: 116px 1fr; align-items: center; gap: 14px; margin-top: 15px; }
+    .donut { width: 112px; height: 112px; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--brand) 0 56%, var(--green) 56% 82%, var(--amber) 82% 100%); }
+    .donut::after { content: "产品"; width: 66px; height: 66px; display: grid; place-items: center; color: var(--muted); background: #fff; border-radius: 50%; font-size: 10px; }
+    .legend-row { display: grid; grid-template-columns: 8px 1fr auto; gap: 6px; align-items: center; height: 29px; color: var(--muted); font-size: 8px; }
+    .legend-row i { width: 7px; height: 7px; background: var(--brand); border-radius: 2px; }
+    .legend-row:nth-child(2) i { background: var(--green); }
+    .legend-row:nth-child(3) i { background: var(--amber); }
+
+    /* Governance */
+    .govern-layout { display: grid; grid-template-columns: 330px 1fr; gap: 34px; }
+    .govern-copy h2 { margin-top: 16px; }
+    .govern-copy > p { margin-top: 17px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+    .govern-stack { margin-top: 25px; }
+    .govern-item { display: grid; grid-template-columns: 30px 1fr; gap: 10px; min-height: 62px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .govern-item b { width: 28px; height: 28px; display: grid; place-items: center; color: #fff; background: var(--brand); border-radius: 7px; font-family: var(--font-mono); font-size: 8px; }
+    .govern-item:nth-child(2) b { background: var(--green); }
+    .govern-item:nth-child(3) b { background: var(--purple); }
+    .govern-item strong { display: block; color: var(--ink); font-size: 12px; }
+    .govern-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .audit-window { height: 460px; }
+    .audit-body { height: 418px; display: grid; grid-template-columns: 1fr 240px; }
+    .audit-list { padding: 13px; border-right: 1px solid var(--line-soft); background: #fff; }
+    .audit-filter { display: flex; gap: 7px; margin-bottom: 10px; }
+    .audit-session { display: grid; grid-template-columns: 1.25fr .7fr .55fr .45fr; align-items: center; min-height: 54px; border-bottom: 1px solid #edf1f6; font-size: 9px; }
+    .audit-session strong { color: var(--ink); }
+    .audit-session span { color: var(--muted); }
+    .risk-badge { justify-self: start; padding: 3px 6px; color: #227b5e !important; background: #e8f7f1; border-radius: 4px; font-weight: 700; }
+    .risk-badge.high { color: #b33f49 !important; background: #fff0f1; }
+    .terminal-replay { padding: 14px; background: #111a2a; color: #cbd5e1; }
+    .terminal-head { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 9px; }
+    .terminal-screen { margin-top: 15px; font-family: var(--font-mono); font-size: 8px; line-height: 1.9; }
+    .terminal-screen b { color: #67d6a5; }
+    .terminal-screen em { color: #f6c96b; font-style: normal; }
+    .terminal-timeline { height: 4px; margin-top: 20px; background: rgba(255,255,255,.13); border-radius: 4px; }
+    .terminal-timeline span { width: 64%; height: 100%; display: block; background: var(--brand); border-radius: 4px; }
+
+    /* Scenario */
+    .scenario-head { text-align: center; }
+    .scenario-head .eyebrow { justify-content: center; }
+    .scenario-head h2 { margin-top: 14px; }
+    .scenario-head p { margin-top: 9px; color: var(--muted); font-size: 14px; }
+    .scenario-flow { display: grid; grid-template-columns: repeat(6, 1fr); margin-top: 43px; position: relative; }
+    .scenario-flow::before { content: ""; position: absolute; left: 78px; right: 78px; top: 35px; height: 2px; background: linear-gradient(90deg, var(--red), var(--amber), var(--brand), var(--green)); }
+    .scenario-step { position: relative; z-index: 2; text-align: center; }
+    .scenario-icon { width: 70px; height: 70px; display: grid; place-items: center; margin: 0 auto; color: #fff; background: var(--brand); border: 7px solid #f4f8fd; border-radius: 50%; box-shadow: 0 0 0 1px #dce4ef; font-family: var(--font-mono); font-size: 10px; font-weight: 750; }
+    .scenario-step:nth-child(1) .scenario-icon { background: var(--red); }
+    .scenario-step:nth-child(2) .scenario-icon { background: var(--amber); }
+    .scenario-step:nth-child(4) .scenario-icon { background: var(--purple); }
+    .scenario-step:nth-child(5) .scenario-icon, .scenario-step:nth-child(6) .scenario-icon { background: var(--green); }
+    .scenario-step h3 { margin-top: 15px; font-size: 14px; }
+    .scenario-step p { width: 154px; min-height: 52px; margin: 7px auto 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .scenario-step b { display: inline-block; margin-top: 7px; color: var(--brand); font-size: 9px; }
+    .scenario-case { display: grid; grid-template-columns: 190px 1fr; gap: 18px; margin-top: 34px; padding: 16px 20px; background: rgba(255,255,255,.82); border: 1px solid var(--line); border-radius: 10px; }
+    .scenario-case strong { color: var(--ink); font-size: 12px; }
+    .scenario-case span { color: var(--muted); font-size: 11px; }
+
+    /* Closing */
+    .closing-paper { padding: 56px 70px; }
+    .closing-layout { height: 100%; display: grid; grid-template-columns: 1fr 410px; gap: 70px; align-items: center; }
+    .closing-copy .brand-lockup { margin-bottom: 54px; }
+    .closing-copy h2 { max-width: 700px; font-size: 56px; line-height: 1.17; }
+    .closing-copy h2 span { color: #79a7ff; }
+    .closing-copy > p { max-width: 650px; margin-top: 24px; color: rgba(255,255,255,.66); font-size: 19px; line-height: 1.6; }
+    .closing-principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 46px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.14); }
+    .closing-principles div { padding: 15px; background: #111b2d; }
+    .closing-principles strong { display: block; color: #fff; font-size: 13px; }
+    .closing-principles span { display: block; margin-top: 4px; color: rgba(255,255,255,.48); font-size: 9px; }
+    .closing-visual { height: 430px; position: relative; }
+    .closing-core { width: 174px; height: 174px; position: absolute; left: 50%; top: 50%; display: grid; place-items: center; transform: translate(-50%,-50%); background: linear-gradient(145deg, #4b83ee, #275cc8); border: 1px solid rgba(255,255,255,.24); border-radius: 50%; box-shadow: 0 25px 55px rgba(25,80,185,.32); text-align: center; z-index: 3; }
+    .closing-core strong { color: #fff; font-size: 22px; }
+    .closing-core span { display: block; margin-top: 4px; color: rgba(255,255,255,.68); font-size: 10px; }
+    .closing-ring { position: absolute; left: 50%; top: 50%; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; transform: translate(-50%,-50%); }
+    .closing-ring.one { width: 280px; height: 280px; }
+    .closing-ring.two { width: 405px; height: 405px; }
+    .closing-node { width: 86px; height: 42px; position: absolute; display: grid; place-items: center; color: rgba(255,255,255,.8); background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; font-size: 10px; }
+    .cn-1 { left: 14px; top: 76px; }
+    .cn-2 { right: 14px; top: 76px; }
+    .cn-3 { left: 2px; bottom: 76px; }
+    .cn-4 { right: 2px; bottom: 76px; }
+    .cn-5 { left: 50%; top: 4px; transform: translateX(-50%); }
+    .cn-6 { left: 50%; bottom: 4px; transform: translateX(-50%); }
+
+    @media (max-width: 720px) {
+      .nav-dots { right: 5px; gap: 6px; }
+      .nav-dot { width: 10px; height: 10px; }
+      .nav-dot::after { inset: 3px; }
+      .nav-dot.is-active::after { inset: 1px; }
+      .edit-indicator { left: 7px; bottom: 7px; }
+      .progress-track { height: 3px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .reveal, .progress-bar, .nav-dot::after, .toast { transition: none; }
+    }
+
+    @media print {
+      @page { size: 16in 9in; margin: 0; }
+      html, body { background: #fff; scroll-snap-type: none; }
+      .slide { height: 9in; min-height: 9in; page-break-after: always; }
+      .paper-stage { width: 16in !important; height: 9in !important; }
+      .paper { width: 1280px; height: 720px; transform: scale(.96) !important; box-shadow: none; }
+      .nav-dots, .progress-track, .edit-indicator, .toast { display: none !important; }
+      .reveal { opacity: 1 !important; transform: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress-track" aria-hidden="true"><div class="progress-bar"></div></div>
+  <nav class="nav-dots" aria-label="幻灯片导航"></nav>
+  <div class="edit-indicator" aria-hidden="true"></div>
+  <div class="toast" role="status" aria-live="polite"></div>
+
+  <main id="deck">
+    <section class="slide is-active" id="slide-1" aria-label="封面">
+      <div class="paper-stage">
+        <article class="paper cover-paper">
+          <div class="cover-layout">
+            <div class="cover-copy">
+              <div class="brand-lockup reveal">
+                <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+                <div class="brand-name"><strong data-editable>AutoOps 天枢</strong><small>INTELLIGENT OPERATIONS PLATFORM</small></div>
+              </div>
+              <div class="eyebrow reveal">ONE WORKSPACE · ONE CONTEXT</div>
+              <h1 class="reveal d1" data-editable>一站式<br><span>智能运维平台</span></h1>
+              <p class="reveal d1" data-editable>统一资产、容器、可观测性、智能分析与安全执行，让运维团队在同一个工作台完成从发现到处置。</p>
+              <div class="cover-tags reveal d2">
+                <span class="cover-tag" data-editable>资源全景</span><span class="cover-tag" data-editable>智能诊断</span><span class="cover-tag" data-editable>安全执行</span><span class="cover-tag" data-editable>全程审计</span>
+              </div>
+            </div>
+            <div class="ui-window cover-window reveal d2" aria-label="AutoOps 平台工作台示意">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">AutoOps / 统一工作台</div><div class="ui-action">智能助手</div></div>
+              <div class="shell-layout">
+                <aside class="shell-sidebar">
+                  <div class="shell-brand-mini"><span class="mini-mark">A</span><span>AutoOps</span></div>
+                  <div class="shell-menu"><span class="active">平台仪表盘</span><span>资产管理</span><span>容器管理</span><span>告警中心</span><span>日志中心</span><span>智能运维</span><span>数据库管理</span><span>成本管理</span></div>
+                </aside>
+                <div class="shell-content">
+                  <div class="shell-content-head"><div><strong>运维态势总览</strong><small> · 生产环境</small></div><span class="chip green">运行正常</span></div>
+                  <div class="mini-stats">
+                    <div class="mini-stat"><span>纳管资产</span><strong>1,284</strong><small>在线率 98.6%</small></div>
+                    <div class="mini-stat"><span>K8s 集群</span><strong>12</strong><small>工作负载 326</small></div>
+                    <div class="mini-stat"><span>活跃告警</span><strong>18</strong><small>较昨日 -22%</small></div>
+                    <div class="mini-stat"><span>本月成本</span><strong>¥ 83K</strong><small>预算使用 69%</small></div>
+                  </div>
+                  <div class="cover-panels">
+                    <div class="cover-chart"><div class="mock-chart-title">基础设施健康趋势</div><div class="line-chart"><i style="height:48%"></i><i style="height:61%"></i><i style="height:57%"></i><i style="height:74%"></i><i style="height:68%"></i><i style="height:84%"></i><i style="height:91%"></i><i style="height:86%"></i></div><div class="chip-row"><span class="chip blue">主机</span><span class="chip">容器</span><span class="chip">数据库</span></div></div>
+                    <div class="cover-list"><div class="mock-chart-title">实时事件</div><ul><li><span>order-service 5xx 异常</span><b>2m</b></li><li><span>prod-k8s 节点压力</span><b>8m</b></li><li><span>MySQL 复制延迟</span><b>12m</b></li><li><span>账单同步完成</span><b>1h</b></li></ul></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>AUTOOPS PLATFORM OVERVIEW</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-2" aria-label="平台价值">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>01 / PLATFORM VALUE</span><span>AUTOOPS 天枢</span></div>
+          <div class="value-layout">
+            <div class="value-lead">
+              <div class="eyebrow reveal">FROM FRAGMENTED TO UNIFIED</div>
+              <h2 class="reveal d1" data-editable>把工具拼图，<br>变成运维工作台</h2>
+              <p class="reveal d1" data-editable>AutoOps 让资产上下文、监控信号、知识经验与生产动作彼此连接，减少跨系统查找与重复确认。</p>
+              <div class="value-metrics reveal d2">
+                <div><strong>1</strong><span data-editable>统一入口</span></div><div><strong>9</strong><span data-editable>核心能力域</span></div><div><strong>360°</strong><span data-editable>资源上下文</span></div>
+              </div>
+            </div>
+            <div class="before-after reveal d2">
+              <div class="state-column">
+                <span class="state-label">传统运维体验</span>
+                <div class="state-item"><strong data-editable>资源分散</strong><span data-editable>主机、云、容器、数据库各自维护</span></div>
+                <div class="state-item"><strong data-editable>信号割裂</strong><span data-editable>告警、日志和拓扑缺少关联上下文</span></div>
+                <div class="state-item"><strong data-editable>处置跳转</strong><span data-editable>诊断、审批、执行、审计跨多个工具</span></div>
+                <div class="state-item"><strong data-editable>经验流失</strong><span data-editable>排障过程难以沉淀和复用</span></div>
+              </div>
+              <div class="switch-arrow">→</div>
+              <div class="state-column after">
+                <span class="state-label">AutoOps 统一体验</span>
+                <div class="state-item"><strong data-editable>一个资源视图</strong><span data-editable>多源资产、业务模型与实时健康统一呈现</span></div>
+                <div class="state-item"><strong data-editable>一条事件链路</strong><span data-editable>从告警到日志、拓扑与影响范围快速联动</span></div>
+                <div class="state-item"><strong data-editable>一个执行闭环</strong><span data-editable>确认、审批、动作与回滚全程可追踪</span></div>
+                <div class="state-item"><strong data-editable>一个运维智库</strong><span data-editable>故障案例、手册和 AI 分析持续沉淀</span></div>
+              </div>
+            </div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>ONE WORKSPACE · ONE CONTEXT</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-3" aria-label="能力全景">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>02 / CAPABILITY MAP</span><span>AUTOOPS 天枢</span></div>
+          <div class="page-heading">
+            <h2 class="reveal" data-editable>覆盖基础设施全生命周期的能力地图</h2>
+            <p class="reveal d1" data-editable>专业域保持深度，跨域工作流保持一致，让不同角色在一个平台协同。</p>
+          </div>
+          <div class="capability-orbit reveal d2">
+            <div class="orbit-ring ring-one"></div><div class="orbit-ring ring-two"></div>
+            <div class="platform-core"><div><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><strong>AutoOps 天枢</strong><span data-editable>统一运维控制台</span></div></div>
+            <div class="cap-node cap-1"><div class="cap-icon">CMDB</div><div><strong data-editable>资产管理</strong><span data-editable>主机、云、IDC、网络、业务拓扑</span></div></div>
+            <div class="cap-node cap-2"><div class="cap-icon">K8S</div><div><strong data-editable>容器管理</strong><span data-editable>集群、工作负载、巡检、诊断</span></div></div>
+            <div class="cap-node cap-3"><div class="cap-icon">ALRT</div><div><strong data-editable>告警中心</strong><span data-editable>规则、事件、静默、通知</span></div></div>
+            <div class="cap-node cap-4"><div class="cap-icon">LOG</div><div><strong data-editable>日志中心</strong><span data-editable>采集、检索、聚合、日志告警</span></div></div>
+            <div class="cap-node cap-5"><div class="cap-icon">AI</div><div><strong data-editable>智能运维</strong><span data-editable>助手、智库、模型、日志分析</span></div></div>
+            <div class="cap-node cap-6"><div class="cap-icon">DB</div><div><strong data-editable>数据库管理</strong><span data-editable>监控、审核、巡检、回滚</span></div></div>
+            <div class="cap-node cap-7"><div class="cap-icon">COST</div><div><strong data-editable>成本管理</strong><span data-editable>多云账单、趋势、分布、明细</span></div></div>
+            <div class="cap-node cap-8"><div class="cap-icon">JOB</div><div><strong data-editable>作业与工单</strong><span data-editable>任务编排、审批、执行记录</span></div></div>
+            <div class="cap-node cap-9"><div class="cap-icon">SEC</div><div><strong data-editable>权限与审计</strong><span data-editable>授权、凭据、录屏、命令审计</span></div></div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>9 CORE DOMAINS · ONE PLATFORM</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-4" aria-label="资产与业务拓扑">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>03 / ASSET &amp; TOPOLOGY</span><span>CMDB</span></div>
+          <div class="cmdb-layout">
+            <div class="feature-copy">
+              <div class="eyebrow reveal">RESOURCE PANORAMA</div>
+              <h2 class="reveal d1" data-editable>看见资产，<br>更看见业务关系</h2>
+              <p class="reveal d1" data-editable>从物理机、虚拟机、云主机和网络设备，延伸到数据库、容器工作负载与业务模型，形成可感知健康状态的资源图谱。</p>
+              <div class="feature-list reveal d2">
+                <div class="feature-line"><b>01</b><div><strong data-editable>多源资产统一纳管</strong><span data-editable>手工、Excel、云厂商、JumpServer 接入</span></div></div>
+                <div class="feature-line"><b>02</b><div><strong data-editable>业务模型与依赖拓扑</strong><span data-editable>绑定主机、K8s、数据库与中间件</span></div></div>
+                <div class="feature-line"><b>03</b><div><strong data-editable>健康视图与风险定位</strong><span data-editable>沿依赖方向查看影响范围与异常节点</span></div></div>
+                <div class="feature-line"><b>04</b><div><strong data-editable>监控、终端与文件操作</strong><span data-editable>从资源详情直接进入生产操作面</span></div></div>
+              </div>
+            </div>
+            <div class="ui-window topology-window reveal d2">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">业务拓扑 / 交易协作平台</div><div class="ui-action">刷新健康</div></div>
+              <div class="topology-body">
+                <aside class="topology-tree"><div class="tree-title">业务资源</div><div class="tree-item active">交易协作平台</div><div class="tree-item">生产环境</div><div class="tree-item">K8s 工作负载</div><div class="tree-item">主机服务</div><div class="tree-item">数据库</div><div class="tree-item">依赖组件</div></aside>
+                <div class="topology-canvas">
+                  <i class="topology-line tl-1"></i><i class="topology-line tl-2"></i><i class="topology-line tl-3"></i><i class="topology-line tl-4"></i><i class="topology-line tl-5"></i>
+                  <div class="topo-node topo-root"><strong>交易协作平台</strong><span>PROD · 健康</span></div>
+                  <div class="topo-node topo-a"><strong>order-service</strong><span>Deployment · 3/3</span></div>
+                  <div class="topo-node topo-b warn"><strong>api-gateway</strong><span>Deployment · 2/3</span></div>
+                  <div class="topo-node topo-c"><strong>node-prod-03</strong><span>主机 · 10.10.3.24</span></div>
+                  <div class="topo-node topo-d"><strong>Redis Cluster</strong><span>中间件 · 正常</span></div>
+                  <div class="topo-node topo-e"><strong>orders-mysql</strong><span>MySQL · 正常</span></div>
+                </div>
+                <aside class="topology-side"><div class="tree-title">业务健康</div><div class="health-score">92</div><div class="side-metric"><span>资源节点</span><b>18</b></div><div class="side-metric"><span>正常</span><b>16</b></div><div class="side-metric"><span>风险</span><b style="color:var(--amber)">2</b></div><div class="side-metric"><span>活跃告警</span><b>3</b></div><div class="chip-row" style="margin-top:14px"><span class="chip blue">下游 3 层</span><span class="chip">定位风险</span></div></aside>
+              </div>
+            </div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>ASSET → RELATION → HEALTH</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-5" aria-label="Kubernetes 管理">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>04 / KUBERNETES</span><span>CONTAINER OPERATIONS</span></div>
+          <div class="page-heading">
+            <h2 class="reveal" data-editable>从集群资源到应用诊断，一屏完成</h2>
+            <p class="reveal d1" data-editable>覆盖日常管理、发布操作、实时监控、集群巡检与 Java 深度诊断。</p>
+          </div>
+          <div class="k8s-grid">
+            <div class="ui-window workload-window reveal d1">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">容器管理 / 工作负载</div><div class="ui-action">创建资源</div></div>
+              <div class="workload-toolbar"><div class="mock-select">prod-k8s</div><div class="mock-select">production</div><div class="mock-input">搜索工作负载</div><div class="mock-button">查询</div><span class="chip green">全部健康</span></div>
+              <div class="workload-tabs"><span class="active">Deployment</span><span>StatefulSet</span><span>DaemonSet</span><span>Pod</span></div>
+              <table class="mock-table"><thead><tr><th style="width:25%">名称</th><th style="width:16%">副本</th><th style="width:17%">CPU / 内存</th><th>镜像</th><th style="width:15%">状态</th></tr></thead><tbody>
+                <tr><td><b>order-service</b></td><td><div class="replicas"><i></i><i></i><i></i></div></td><td>28% / 42%</td><td>order:v2.8.1</td><td><span class="status-dot">运行中</span></td></tr>
+                <tr><td><b>api-gateway</b></td><td><div class="replicas"><i></i><i></i><i style="background:var(--amber)"></i></div></td><td>52% / 68%</td><td>gateway:v4.2</td><td><span class="status-dot warn">更新中</span></td></tr>
+                <tr><td><b>payment-worker</b></td><td><div class="replicas"><i></i><i></i></div></td><td>17% / 36%</td><td>worker:v1.9</td><td><span class="status-dot">运行中</span></td></tr>
+                <tr><td><b>inventory-sync</b></td><td><div class="replicas"><i></i></div></td><td>12% / 24%</td><td>sync:v3.1</td><td><span class="status-dot">运行中</span></td></tr>
+                <tr><td><b>message-consumer</b></td><td><div class="replicas"><i></i><i></i></div></td><td>31% / 49%</td><td>consumer:v2.0</td><td><span class="status-dot">运行中</span></td></tr>
+              </tbody></table>
+            </div>
+            <div class="k8s-aside reveal d2">
+              <div class="health-panel"><div class="panel-title">集群健康</div><div class="cluster-score"><div class="score-ring">96</div><div><span>prod-k8s</span><strong>运行良好</strong><span style="margin-top:5px">24 节点 · 326 工作负载</span></div></div></div>
+              <div class="inspection-panel"><div class="panel-title">最近巡检</div><div class="inspection-row"><span>控制面组件</span><b>正常</b></div><div class="inspection-row"><span>节点资源压力</span><b class="warn">2 项</b></div><div class="inspection-row"><span>异常工作负载</span><b>0 项</b></div><div class="inspection-row"><span>配置与存储</span><b>正常</b></div><div class="chip-row" style="margin-top:10px"><span class="chip blue">查看报告</span><span class="chip">导出</span></div></div>
+            </div>
+          </div>
+          <div class="k8s-caps reveal d2">
+            <div class="k8s-cap"><strong>集群 / 节点</strong><span>状态与资源分配</span></div><div class="k8s-cap"><strong>工作负载</strong><span>伸缩、重启、回滚</span></div><div class="k8s-cap"><strong>网络 / 存储</strong><span>Ingress、PVC、PV</span></div><div class="k8s-cap"><strong>配置 / 事件</strong><span>YAML 与问题线索</span></div><div class="k8s-cap"><strong>终端 / 文件</strong><span>实时调试与日志</span></div><div class="k8s-cap"><strong>Arthas</strong><span>JVM、线程、火焰图</span></div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>CLUSTER → WORKLOAD → DIAGNOSIS</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-6" aria-label="日志与告警">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>05 / OBSERVABILITY</span><span>LOGS &amp; ALERTS</span></div>
+          <div class="page-heading">
+            <h2 class="reveal" data-editable>让日志成为告警处置的第一现场</h2>
+            <p class="reveal d1" data-editable>统一采集主机与 K8s 日志，结合查询聚合、规则引擎与事件时间线形成响应闭环。</p>
+          </div>
+          <div class="observe-layout">
+            <div class="ui-window log-window reveal d1">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">日志中心 / 实时查询</div><div class="ui-action">AI 分析</div></div>
+              <div class="query-strip"><div class="query-field">_stream:{app="order-service"} AND level:error</div><div class="mock-select">最近 30 分钟</div><div class="mock-button">查询</div></div>
+              <div class="hits-chart"><div class="mock-chart-title">日志命中趋势 · 1,842 条</div><div class="area-chart"><i style="height:18%"></i><i style="height:22%"></i><i style="height:16%"></i><i style="height:28%"></i><i style="height:34%"></i><i style="height:31%"></i><i style="height:48%"></i><i style="height:74%"></i><i style="height:62%"></i><i style="height:92%"></i><i style="height:78%"></i><i style="height:55%"></i><i style="height:37%"></i><i style="height:24%"></i></div></div>
+              <div class="log-lines"><div class="log-line"><span>10:42:18.128</span><b class="level error">ERROR</b><span>upstream request timeout · order-service /api/order</span></div><div class="log-line"><span>10:42:17.946</span><b class="level">WARN</b><span>connection pool wait time exceeded 800ms</span></div><div class="log-line"><span>10:42:17.502</span><b class="level error">ERROR</b><span>database query canceled after deadline</span></div><div class="log-line"><span>10:42:16.233</span><b class="level">WARN</b><span>retry attempt 3 for orders-mysql</span></div></div>
+            </div>
+            <div class="incident-panel reveal d2">
+              <div class="incident-head"><strong data-editable>订单服务 5xx 异常</strong><span>活跃告警 · 已认领 · production</span></div>
+              <div class="incident-summary"><div><span>持续时间</span><b>12m</b></div><div><span>影响实例</span><b>3</b></div><div><span>通知状态</span><b>已送达</b></div></div>
+              <div class="incident-timeline"><div class="timeline-item"><strong>10:41 · 告警触发</strong><span>错误率超过 5%，规则组：业务可用性</span></div><div class="timeline-item"><strong>10:43 · 值班人认领</strong><span>已关联 order-service 日志与业务拓扑</span></div><div class="timeline-item"><strong>10:49 · 服务恢复</strong><span>回滚到 v2.8.0，错误率恢复正常</span></div></div>
+              <div class="chip-row" style="padding:0 16px"><span class="chip red">严重</span><span class="chip blue">查看时间线</span><span class="chip">静默</span></div>
+            </div>
+          </div>
+          <div class="observe-flow reveal d2"><b>Vector Agent</b><span>→</span><span>日志库</span><span>→</span><span>LogsQL 分析</span><span>→</span><span>规则触发</span><span>→</span><b>事件处置与通知</b></div>
+          <footer class="slide-footer reveal d2"><span>COLLECT → QUERY → ALERT → RESPOND</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-7" aria-label="智能运维">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>06 / AIOPS</span><span>AI COPILOT</span></div>
+          <div class="ai-layout">
+            <div class="ai-copy">
+              <div class="eyebrow reveal">EVIDENCE-DRIVEN AI</div>
+              <h2 class="reveal d1" data-editable>不只回答问题，<br>还组织证据与动作</h2>
+              <p class="reveal d1" data-editable>AutoOps 智能助手理解当前页面和资源上下文，调用受控工具查询真实状态，并将高风险执行纳入确认流程。</p>
+              <div class="ai-pillars reveal d2"><div class="ai-pillar"><b>01</b><strong data-editable>智能助手</strong></div><div class="ai-pillar"><b>02</b><strong data-editable>运维智库</strong></div><div class="ai-pillar"><b>03</b><strong data-editable>日志分析</strong></div><div class="ai-pillar"><b>04</b><strong data-editable>模型管理</strong></div></div>
+              <div class="chip-row reveal d2" style="margin-top:18px"><span class="chip blue">资源查询</span><span class="chip">根因分析</span><span class="chip">巡检脚本</span><span class="chip green">反馈学习</span></div>
+            </div>
+            <div class="ui-window chat-window reveal d2">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">AIOps 智能助手 · production</div><div class="ui-action">新会话</div></div>
+              <div class="chat-shell">
+                <aside class="chat-history"><div class="chat-history-title"><span>会话历史</span><b>6</b></div><div class="history-item active">分析 order-service 最近的 5xx 异常</div><div class="history-item">prod-k8s 集群有没有异常？</div><div class="history-item">当前未确认的严重告警</div><div class="history-item">数据平台本月成本</div><div class="history-item">生成 Redis 巡检任务</div></aside>
+                <div class="chat-main">
+                  <div class="chat-topic"><strong>故障分析 · order-service</strong><span>执行需确认</span></div>
+                  <div class="user-bubble" data-editable>分析生产环境 order-service 最近的 5xx 异常，并给出处置建议。</div>
+                  <div class="assistant-answer"><strong>初步判断：数据库连接池等待导致请求超时</strong><div class="evidence-list"><div class="evidence-row"><b>告警</b><span>5xx 错误率在 10:41 升至 8.7%</span><i>已验证</i></div><div class="evidence-row"><b>日志</b><span>connection pool wait time exceeded 800ms</span><i>36 条</i></div><div class="evidence-row"><b>拓扑</b><span>下游 orders-mysql 延迟上升</span><i>关联</i></div></div><div class="ai-action-card"><strong>建议动作 · 回滚 order-service 到 v2.8.0</strong><div><span>风险等级：中</span><b>需要人工确认</b></div></div></div>
+                  <div class="chat-input"><span>继续追问，或确认生成处置任务</span><span class="send-dot">↑</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>CONTEXT → EVIDENCE → REASONING → CONFIRMATION</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-8" aria-label="数据库运维">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>07 / DATABASE OPERATIONS</span><span>SAFE CHANGE</span></div>
+          <div class="page-heading">
+            <h2 class="reveal" data-editable>数据库变更，可审、可控、可回滚</h2>
+            <p class="reveal d1" data-editable>覆盖数据资产、监控巡检、SQL 审核、审批执行、结果导出与回滚工具链。</p>
+          </div>
+          <div class="db-layout">
+            <div class="ui-window review-window reveal d1">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">数据库管理 / SQL 审核</div><div class="ui-action">新建工单</div></div>
+              <div class="review-stats"><div class="review-stat"><span>待审批</span><strong>8</strong></div><div class="review-stat"><span>待执行</span><strong>3</strong></div><div class="review-stat"><span>今日完成</span><strong>21</strong></div><div class="review-stat"><span>风险拦截</span><strong>5</strong></div></div>
+              <table class="mock-table review-table"><thead><tr><th style="width:25%">工单</th><th style="width:16%">类型</th><th>目标实例</th><th style="width:15%">风险</th><th style="width:17%">状态</th></tr></thead><tbody>
+                <tr><td><b>用户表增加索引</b></td><td><span class="ticket-type">DDL</span></td><td>prod-user-mysql</td><td><span class="chip amber">中</span></td><td><span class="status-dot warn">待审批</span></td></tr>
+                <tr><td><b>修复订单状态</b></td><td><span class="ticket-type">DML</span></td><td>prod-order-mysql</td><td><span class="chip red">高</span></td><td><span class="status-dot">已通过</span></td></tr>
+                <tr><td><b>导出月度明细</b></td><td><span class="ticket-type">QUERY</span></td><td>reporting-pg</td><td><span class="chip green">低</span></td><td><span class="status-dot">已完成</span></td></tr>
+                <tr><td><b>回滚异常数据</b></td><td><span class="ticket-type">ROLLBACK</span></td><td>prod-order-mysql</td><td><span class="chip amber">中</span></td><td><span class="status-dot warn">待执行</span></td></tr>
+              </tbody></table>
+            </div>
+            <aside class="workflow-panel reveal d2"><h3 data-editable>变更执行链</h3><p class="workflow-sub">工单 #DB-20260719-018</p><div class="approval-flow"><div class="approval-step done"><b class="approval-num">1</b><div><strong>自动检测</strong><span>语法、规则、影响范围</span></div><em>通过</em></div><div class="approval-step done"><b class="approval-num">2</b><div><strong>人工审批</strong><span>负责人确认变更窗口</span></div><em>通过</em></div><div class="approval-step warn"><b class="approval-num">3</b><div><strong>受控执行</strong><span>gh-ost 在线变更</span></div><em>进行中</em></div><div class="approval-step"><b class="approval-num">4</b><div><strong>结果与审计</strong><span>影响行、耗时、执行日志</span></div><em>等待</em></div></div><div class="rollback-box"><strong>回滚保障</strong><span>备份表 · Binlog 位点 · 闪回 SQL · 回滚工单</span></div></aside>
+          </div>
+          <div class="db-caps reveal d2"><div class="k8s-cap"><strong>资产管理</strong><span>MySQL / PG / Redis</span></div><div class="k8s-cap"><strong>监控大盘</strong><span>容量与性能指标</span></div><div class="k8s-cap"><strong>慢日志</strong><span>聚合与 Top SQL</span></div><div class="k8s-cap"><strong>数据操作</strong><span>浏览、编辑、导出</span></div><div class="k8s-cap"><strong>SQL 审核</strong><span>规则与审批流</span></div><div class="k8s-cap"><strong>AI 助手</strong><span>诊断与 SQL 建议</span></div></div>
+          <footer class="slide-footer reveal d2"><span>CHECK → APPROVE → EXECUTE → ROLLBACK</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-9" aria-label="成本治理">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>08 / FINOPS</span><span>MULTI-CLOUD COST</span></div>
+          <div class="cost-layout">
+            <div class="cost-copy">
+              <div class="eyebrow reveal">COST VISIBILITY</div>
+              <h2 class="reveal d1" data-editable>看清每一笔云成本，<br>找到优化空间</h2>
+              <p class="reveal d1" data-editable>统一接入多云账单，从费用趋势、产品、地域和计费模式多维分析，让成本变化更早被发现。</p>
+              <div class="cost-benefits reveal d2"><div class="cost-benefit"><strong data-editable>多云账单统一接入</strong><span data-editable>数据源配置、手动同步与明细导出</span></div><div class="cost-benefit"><strong data-editable>多维成本分析</strong><span data-editable>按月份、厂商、产品、地域和付费模式</span></div><div class="cost-benefit"><strong data-editable>异常趋势快速识别</strong><span data-editable>环比变化与费用结构一目了然</span></div></div>
+            </div>
+            <div class="ui-window cost-window reveal d2">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">成本管理 / 仪表盘</div><div class="chip blue">近 6 个月</div></div>
+              <div class="cost-dashboard">
+                <div class="cost-metrics"><div class="cost-metric"><span>本月总费用</span><strong>¥ 83,420</strong><small>环比 -6.8%</small></div><div class="cost-metric"><span>腾讯云</span><strong>¥ 46,730</strong><small>占比 56.0%</small></div><div class="cost-metric"><span>七牛云</span><strong>¥ 21,850</strong><small>占比 26.2%</small></div><div class="cost-metric"><span>其他运营商</span><strong>¥ 14,840</strong><small>占比 17.8%</small></div></div>
+                <div class="cost-charts"><div class="cost-chart"><div class="mock-chart-title">费用趋势</div><div class="trend-graph"><div class="trend-fill"></div><div class="trend-line"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="chip-row" style="margin-top:12px"><span class="chip blue">总费用</span><span class="chip green">预算内</span></div></div><div class="cost-chart"><div class="mock-chart-title">产品费用分布</div><div class="donut-wrap"><div class="donut"></div><div><div class="legend-row"><i></i><span>云服务器</span><b>56%</b></div><div class="legend-row"><i></i><span>对象存储</span><b>26%</b></div><div class="legend-row"><i></i><span>数据库</span><b>18%</b></div></div></div><div class="chip-row"><span class="chip">按量计费 64%</span><span class="chip">包年包月 36%</span></div></div></div>
+              </div>
+            </div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>CONNECT → ANALYZE → OPTIMIZE</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-10" aria-label="治理与审计">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>09 / GOVERNANCE</span><span>SECURE OPERATIONS</span></div>
+          <div class="govern-layout">
+            <div class="govern-copy">
+              <div class="eyebrow reveal">CONTROL &amp; TRACEABILITY</div>
+              <h2 class="reveal d1" data-editable>生产动作有边界，<br>关键过程有证据</h2>
+              <p class="reveal d1" data-editable>通过用户与角色、主机授权、凭据管理、任务工单和会话审计，将执行权限与操作责任清晰绑定。</p>
+              <div class="govern-stack reveal d2"><div class="govern-item"><b>IAM</b><div><strong data-editable>身份与资源授权</strong><span data-editable>用户、角色、部门、用户组和主机授权</span></div></div><div class="govern-item"><b>JOB</b><div><strong data-editable>作业与工单控制</strong><span data-editable>任务创建、审批确认、执行状态和结果</span></div></div><div class="govern-item"><b>AUD</b><div><strong data-editable>会话与命令审计</strong><span data-editable>SSH / RDP 录屏、回放、敏感命令识别</span></div></div></div>
+            </div>
+            <div class="ui-window audit-window reveal d2">
+              <div class="ui-window-head"><div class="ui-traffic"><i></i><i></i><i></i></div><div class="ui-window-title">审计中心 / 会话录制</div><div class="ui-action">查看命令</div></div>
+              <div class="audit-body">
+                <div class="audit-list"><div class="audit-filter"><div class="mock-input">主机 / IP / 用户</div><div class="mock-select">风险等级</div><div class="mock-button">搜索</div></div><div class="audit-session"><strong>prod-web-01</strong><span>admin</span><span>18m 24s</span><b class="risk-badge">正常</b></div><div class="audit-session"><strong>prod-db-03</strong><span>operator</span><span>06m 51s</span><b class="risk-badge high">高危</b></div><div class="audit-session"><strong>network-core-02</strong><span>netops</span><span>12m 07s</span><b class="risk-badge">正常</b></div><div class="audit-session"><strong>prod-cache-04</strong><span>sre</span><span>09m 33s</span><b class="risk-badge">正常</b></div><div class="audit-session"><strong>win-app-06</strong><span>admin</span><span>21m 10s</span><b class="risk-badge high">可疑</b></div></div>
+                <div class="terminal-replay"><div class="terminal-head"><span>prod-db-03 / operator</span><span>00:04:18</span></div><div class="terminal-screen"><b>$</b> mysql -h orders-db<br><b>$</b> show processlist;<br><b>$</b> select count(*) from orders;<br><em>$ delete from orders ...</em><br><span style="color:#ef8f98">[敏感命令已标记]</span><br><b>$</b> exit</div><div class="terminal-timeline"><span></span></div><div class="chip-row" style="margin-top:15px"><span class="chip red">高危命令 1</span><span class="chip">1.0x</span></div></div>
+              </div>
+            </div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>IDENTITY → AUTHORIZATION → EXECUTION → AUDIT</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-11" aria-label="故障处置闭环">
+      <div class="paper-stage">
+        <article class="paper">
+          <div class="slide-topline reveal"><span>10 / CROSS-DOMAIN WORKFLOW</span><span>INCIDENT RESPONSE</span></div>
+          <div class="scenario-head">
+            <div class="eyebrow reveal">ONE INCIDENT · ONE CONTEXT</div>
+            <h2 class="reveal d1" data-editable>一次故障，串起平台完整能力</h2>
+            <p class="reveal d1" data-editable>以订单服务 5xx 异常为例，从发现到复盘不再跨系统搬运信息。</p>
+          </div>
+          <div class="scenario-flow reveal d2">
+            <div class="scenario-step"><div class="scenario-icon">01</div><h3 data-editable>发现</h3><p data-editable>告警规则识别错误率持续升高</p><b>告警中心</b></div>
+            <div class="scenario-step"><div class="scenario-icon">02</div><h3 data-editable>定位</h3><p data-editable>业务拓扑定位服务与下游依赖</p><b>CMDB</b></div>
+            <div class="scenario-step"><div class="scenario-icon">03</div><h3 data-editable>分析</h3><p data-editable>聚合日志与指标，AI 组织证据</p><b>日志 + AIOps</b></div>
+            <div class="scenario-step"><div class="scenario-icon">04</div><h3 data-editable>确认</h3><p data-editable>输出建议动作、影响范围与风险</p><b>智能助手</b></div>
+            <div class="scenario-step"><div class="scenario-icon">05</div><h3 data-editable>处置</h3><p data-editable>确认后执行工作负载版本回滚</p><b>Kubernetes</b></div>
+            <div class="scenario-step"><div class="scenario-icon">06</div><h3 data-editable>沉淀</h3><p data-editable>保留执行轨迹并写入故障知识库</p><b>审计 + 智库</b></div>
+          </div>
+          <div class="scenario-case reveal d2"><strong data-editable>最终结果</strong><span data-editable>异常服务恢复，告警自动解除；根因证据、操作记录和处置手册进入同一事件上下文，供下一次故障直接复用。</span></div>
+          <footer class="slide-footer reveal d2"><span>DETECT → LOCATE → REASON → ACT → LEARN</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-12" aria-label="总结">
+      <div class="paper-stage">
+        <article class="paper paper-dark closing-paper">
+          <div class="closing-layout">
+            <div class="closing-copy">
+              <div class="brand-lockup reveal"><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><div class="brand-name"><strong data-editable>AutoOps 天枢</strong><small>INTELLIGENT OPERATIONS PLATFORM</small></div></div>
+              <h2 class="reveal d1" data-editable>让运维从“看见问题”，<br>走向<span>智能闭环</span></h2>
+              <p class="reveal d1" data-editable>以统一资源上下文为基础，以可观测信号为入口，以智能分析加速决策，以受控执行保障生产安全。</p>
+              <div class="closing-principles reveal d2"><div><strong data-editable>统一入口</strong><span>ONE WORKSPACE</span></div><div><strong data-editable>统一资源</strong><span>ONE RESOURCE VIEW</span></div><div><strong data-editable>统一信号</strong><span>ONE EVENT CONTEXT</span></div><div><strong data-editable>统一动作</strong><span>ONE ACTION LOOP</span></div></div>
+            </div>
+            <div class="closing-visual reveal d2"><div class="closing-ring one"></div><div class="closing-ring two"></div><div class="closing-core"><div><strong>AutoOps</strong><span>统一运维控制台</span></div></div><div class="closing-node cn-1">资产管理</div><div class="closing-node cn-2">容器管理</div><div class="closing-node cn-3">日志告警</div><div class="closing-node cn-4">数据库</div><div class="closing-node cn-5">AIOps</div><div class="closing-node cn-6">安全审计</div></div>
+          </div>
+          <footer class="slide-footer reveal d2"><span>AUTOOPS 天枢 · PRODUCT OVERVIEW</span><span data-page></span></footer>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const PAPER_WIDTH = 1280;
+      const PAPER_HEIGHT = 720;
+      const slides = [...document.querySelectorAll('.slide')];
+      const stages = [...document.querySelectorAll('.paper-stage')];
+      const progress = document.querySelector('.progress-bar');
+      const dotsRoot = document.querySelector('.nav-dots');
+      const toast = document.querySelector('.toast');
+      const editableNodes = [...document.querySelectorAll('[data-editable]')];
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let currentIndex = 0;
+      let editing = false;
+      let toastTimer = 0;
+
+      function fitPapers() {
+        const margin = Math.max(18, Math.min(window.innerWidth, window.innerHeight) * 0.055);
+        const scale = Math.min(
+          (window.innerWidth - margin * 2) / PAPER_WIDTH,
+          (window.innerHeight - margin * 2) / PAPER_HEIGHT,
+          1.35
+        );
+        const safeScale = Math.max(scale, 0.1);
+        document.documentElement.style.setProperty('--deck-scale', safeScale.toFixed(4));
+        stages.forEach((stage) => {
+          stage.style.width = `${PAPER_WIDTH * safeScale}px`;
+          stage.style.height = `${PAPER_HEIGHT * safeScale}px`;
+        });
+      }
+
+      function updatePageMarks() {
+        document.querySelectorAll('[data-page]').forEach((node) => {
+          const slide = node.closest('.slide');
+          const index = slides.indexOf(slide) + 1;
+          node.textContent = `${String(index).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+        });
+      }
+
+      function buildDots() {
+        dotsRoot.textContent = '';
+        slides.forEach((slide, index) => {
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'nav-dot';
+          dot.setAttribute('aria-label', `转到第 ${index + 1} 页`);
+          dot.title = `第 ${index + 1} 页`;
+          dot.addEventListener('click', () => goTo(index));
+          dotsRoot.appendChild(dot);
+        });
+      }
+
+      function setCurrent(index) {
+        currentIndex = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((slide, i) => slide.classList.toggle('is-active', i === currentIndex));
+        [...dotsRoot.children].forEach((dot, i) => {
+          dot.classList.toggle('is-active', i === currentIndex);
+          if (i === currentIndex) dot.setAttribute('aria-current', 'page');
+          else dot.removeAttribute('aria-current');
+        });
+        progress.style.transform = `scaleX(${(currentIndex + 1) / slides.length})`;
+      }
+
+      function goTo(index) {
+        const nextIndex = Math.max(0, Math.min(slides.length - 1, index));
+        slides[nextIndex].scrollIntoView({ block: 'start', behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+        setCurrent(nextIndex);
+      }
+
+      function initialIndexFromHash() {
+        const match = window.location.hash.match(/^#slide-(\d+)$/);
+        if (!match) return 0;
+        return Math.max(0, Math.min(slides.length - 1, Number(match[1]) - 1));
+      }
+
+      function setEditing(next) {
+        editing = Boolean(next);
+        document.body.classList.toggle('editing', editing);
+        editableNodes.forEach((node) => {
+          if (editing) {
+            node.setAttribute('contenteditable', 'true');
+            node.setAttribute('spellcheck', 'false');
+          } else {
+            node.removeAttribute('contenteditable');
+            node.removeAttribute('spellcheck');
+          }
+        });
+        showToast(editing ? '编辑模式已开启' : '编辑模式已关闭');
+      }
+
+      function showToast(message) {
+        window.clearTimeout(toastTimer);
+        toast.textContent = message;
+        toast.classList.add('show');
+        toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1500);
+      }
+
+      function exportHtml() {
+        const clone = document.documentElement.cloneNode(true);
+        clone.querySelector('body').classList.remove('editing');
+        clone.querySelectorAll('.slide').forEach((slide, index) => slide.classList.toggle('is-active', index === 0));
+        clone.querySelectorAll('[contenteditable], [spellcheck]').forEach((node) => {
+          node.removeAttribute('contenteditable');
+          node.removeAttribute('spellcheck');
+        });
+        clone.querySelectorAll('.paper-stage').forEach((stage) => stage.removeAttribute('style'));
+        const clonedProgress = clone.querySelector('.progress-bar');
+        if (clonedProgress) clonedProgress.removeAttribute('style');
+        const clonedToast = clone.querySelector('.toast');
+        if (clonedToast) { clonedToast.classList.remove('show'); clonedToast.textContent = ''; }
+        const source = '<!doctype html>\n' + clone.outerHTML;
+        const blob = new Blob([source], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'autoops-platform-overview-edited.html';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast('HTML 已导出');
+      }
+
+      document.addEventListener('keydown', (event) => {
+        const key = event.key;
+        const activeEditable = document.activeElement?.isContentEditable;
+        if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 's') {
+          event.preventDefault();
+          exportHtml();
+          return;
+        }
+        if (key === 'Escape' && editing) {
+          event.preventDefault();
+          setEditing(false);
+          return;
+        }
+        if (key.toLowerCase() === 'e' && !event.ctrlKey && !event.metaKey && !event.altKey && !activeEditable) {
+          event.preventDefault();
+          setEditing(!editing);
+          return;
+        }
+        if (editing || activeEditable) return;
+        if (['ArrowDown', 'ArrowRight', 'PageDown', ' '].includes(key)) {
+          event.preventDefault();
+          goTo(currentIndex + 1);
+        } else if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(key)) {
+          event.preventDefault();
+          goTo(currentIndex - 1);
+        } else if (key === 'Home') {
+          event.preventDefault();
+          goTo(0);
+        } else if (key === 'End') {
+          event.preventDefault();
+          goTo(slides.length - 1);
+        }
+      });
+
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) setCurrent(slides.indexOf(visible.target));
+      }, { threshold: [0.35, 0.55, 0.75] });
+
+      slides.forEach((slide) => observer.observe(slide));
+      window.addEventListener('resize', fitPapers, { passive: true });
+      window.addEventListener('orientationchange', fitPapers, { passive: true });
+      buildDots();
+      updatePageMarks();
+      fitPapers();
+      const initialIndex = initialIndexFromHash();
+      setCurrent(initialIndex);
+      if (initialIndex > 0) slides[initialIndex].scrollIntoView({ block: 'start', behavior: 'auto' });
+    })();
+  </script>
+</body>
+</html>

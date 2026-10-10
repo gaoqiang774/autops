@@ -301,7 +301,7 @@ for idx in range(4, len(bk_rows)):
         "backupPolicy": backup_strategy or "每日定时备份",
         "storageLocation": backup_storage_path or "政务外网专用存储池",
         "retentionDays": 30,
-        "lastBackupTime": "2026-09-24 03:00:00",
+        "lastBackupTime": "2026-09-29 03:00:00",
         "status": "normal",
         "remarks": remarks
     }
@@ -548,11 +548,11 @@ for h in raw_hw:
         "securityGrade": "等保三级" if "核心" in h["projectName"] else "等保二级",
         "backupStrategy": "定时快照" if "生产" in h["env"] else "无",
         "monitoringStatus": "已接入",
-        "lastPatched": "2026-09-24",
+        "lastPatched": "2026-09-29",
         "remarks": h["remarks"],
         "tags": [h["customerName"], h["projectName"], h["env"], h["cloudVendor"]],
-        "created": "2026-09-24 10:00:00",
-        "updated": "2026-09-24 10:00:00"
+        "created": "2026-09-29 12:00:00",
+        "updated": "2026-09-29 12:00:00"
     }
 
     if h["deviceType"] == "物理机":
@@ -795,7 +795,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 with open('db/mysql_schema.sql', 'w', encoding='utf-8') as f:
     f.write(mysql_ddl)
 
-sql_lines = [mysql_ddl, "\\n-- ==========================================================", "-- 数据填充部分 (全量基于《信息资产台账-v361.xlsx》)", "-- ==========================================================\\n"]
+sql_lines = [mysql_ddl, "\n-- ==========================================================", "-- 数据填充部分 (全量基于《信息资产台账-v361.xlsx》)", "-- ==========================================================\n"]
 
 # Insert projects
 sql_lines.append("-- 插入项目分组数据")
@@ -825,7 +825,7 @@ for p in project_list:
         sql_escape(p["description"])
     ]
     p_inserts.append(f"({', '.join(vals)})")
-sql_lines.append(",\\n".join(p_inserts) + ";\\n")
+sql_lines.append(",\n".join(p_inserts) + ";\n")
 
 # Insert hardware
 sql_lines.append(f"-- 插入硬件资产数据 ({len(raw_hw)} 条)")
@@ -869,7 +869,7 @@ for h in raw_hw:
         sql_escape(h["remarks"])
     ]
     h_inserts.append(f"({', '.join(vals)})")
-sql_lines.append(",\\n".join(h_inserts) + ";\\n")
+sql_lines.append(",\n".join(h_inserts) + ";\n")
 
 # Insert databases
 sql_lines.append(f"-- 插入数据库实例数据 ({len(raw_dbs)} 条)")
@@ -901,7 +901,7 @@ for d in raw_dbs:
         sql_escape(d["remarks"])
     ]
     d_inserts.append(f"({', '.join(vals)})")
-sql_lines.append(",\\n".join(d_inserts) + ";\\n")
+sql_lines.append(",\n".join(d_inserts) + ";\n")
 
 # Insert middlewares
 sql_lines.append(f"-- 插入中间件数据 ({len(raw_mws)} 条)")
@@ -929,7 +929,7 @@ for m in raw_mws:
         sql_escape(m["remarks"])
     ]
     m_inserts.append(f"({', '.join(vals)})")
-sql_lines.append(",\\n".join(m_inserts) + ";\\n")
+sql_lines.append(",\n".join(m_inserts) + ";\n")
 
 # Insert backups
 sql_lines.append(f"-- 插入备份方案数据 ({len(raw_bks)} 条)")
@@ -957,7 +957,7 @@ for b in raw_bks:
         sql_escape(b["remarks"])
     ]
     b_inserts.append(f"({', '.join(vals)})")
-sql_lines.append(",\\n".join(b_inserts) + ";\\n")
+sql_lines.append(",\n".join(b_inserts) + ";\n")
 
 # Insert ops accounts
 sql_lines.append(f"-- 插入运维账号与堡垒机数据 ({len(raw_ops)} 条)")
@@ -987,9 +987,9 @@ for o in raw_ops:
         sql_escape(o["remarks"])
     ]
     o_inserts.append(f"({', '.join(vals)})")
-sql_lines.append(",\\n".join(o_inserts) + ";\\n")
+sql_lines.append(",\n".join(o_inserts) + ";\n")
 
-full_sql_dump = "\\n".join(sql_lines)
+full_sql_dump = "\n".join(sql_lines)
 with open('db/init_mysql_v361.sql', 'w', encoding='utf-8') as f:
     f.write(full_sql_dump)
 with open('db/init_mysql_v360.sql', 'w', encoding='utf-8') as f:
@@ -1400,7 +1400,7 @@ export const initialOpsChannels: OpsChannel[] = [
     urlOrTarget: "https://vpn.unicomcloud.bj.cn",
     accountNote: "bj_rsj_ops",
     remarks: "生产运维通道",
-    updated: "2026-09-24 10:00"
+    updated: "2026-09-29 12:00"
   }}
 ];
 """

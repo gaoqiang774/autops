@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AutoOps - 一键导入 v360 数据至 MySQL 数据库工具
+AutoOps - 一键导入 v361 数据至 MySQL 数据库工具
 使用方法:
   python scripts/import_to_mysql.py --host 127.0.0.1 --port 3306 --user root --password yourpassword --database autops
 或直接设置环境变量:
@@ -16,13 +16,14 @@ import sys
 import argparse
 
 def main():
-    parser = argparse.ArgumentParser(description="一键导入 v360 数据到 MySQL")
+    parser = argparse.ArgumentParser(description="一键导入 v363 数据到 MySQL")
     parser.add_argument("--host", default=os.getenv("MYSQL_HOST", "127.0.0.1"), help="MySQL 主机地址")
     parser.add_argument("--port", type=int, default=int(os.getenv("MYSQL_PORT", "3306")), help="MySQL 端口")
     parser.add_argument("--user", default=os.getenv("MYSQL_USER", "root"), help="MySQL 用户名")
     parser.add_argument("--password", default=os.getenv("MYSQL_PASSWORD", ""), help="MySQL 密码")
     parser.add_argument("--database", default=os.getenv("MYSQL_DATABASE", "autops"), help="MySQL 数据库名称")
-    parser.add_argument("--sql-file", default="db/init_mysql_v360.sql", help="SQL 导入文件路径")
+    default_sql = "db/init_mysql_v363.sql" if os.path.exists("db/init_mysql_v363.sql") else ("db/init_mysql_v361.sql" if os.path.exists("db/init_mysql_v361.sql") else "db/init_mysql_v360.sql")
+    parser.add_argument("--sql-file", default=default_sql, help="SQL 导入文件路径")
     args = parser.parse_args()
 
     sql_path = os.path.abspath(args.sql_file)

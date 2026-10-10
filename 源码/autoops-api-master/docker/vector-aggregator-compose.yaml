@@ -1,0 +1,63 @@
+services:
+  aiops-vector-aggregator:
+    image: crpi-aj3vgoxp9kzh2jx4.cn-hangzhou.personal.cr.aliyuncs.com/zhangfan_k8s/vector:latest-debian
+    container_name: aiops-vector-aggregator
+    restart: unless-stopped
+    network_mode: host
+    extra_hosts:
+      - "kafka-node1-2-23:192.168.2.23"
+      - "kafka-node2-4-210:192.168.4.210"
+      - "kafka-node3-7-25:192.168.7.25"
+    security_opt:
+      - seccomp=unconfined
+    pids_limit: -1
+    ulimits:
+      nproc:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - /var/lib/aiops-vector-aggregator:/var/lib/aiops-vector-aggregator
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        mkdir -p /etc/vector /var/lib/aiops-vector-aggregator
+        cat > /etc/vector/vector.yaml <<'EOF'
+        data_dir: /var/lib/aiops-vector-aggregator
+
+        sources:
+          kafka_logs:
+            type: kafka
+            bootstrap_servers: "192.168.2.23:9092,192.168.4.210:9092,192.168.7.25:9092"
+            group_id: "aiops-victorialogs-writer"
+            topics:
+              - "aiops-logs"
+            auto_offset_reset: earliest
+            decoding:
+              codec: json
+
+        sinks:
+          victorialogs:
+            type: http
+            inputs:
+              - kafka_logs
+            uri: "http://192.168.34.192:9428/insert/jsonline?_stream_fields=project_code,store_code,env,host_name,collect_task_code&_msg_field=_msg&_time_field=_time"
+            method: post
+            encoding:
+              codec: json
+            framing:
+              method: newline_delimited
+            compression: gzip
+            batch:
+              max_events: 1000
+              max_bytes: 1048576
+              timeout_secs: 1
+            request:
+              timeout_secs: 60
+            buffer:
+              type: disk
+              max_size: 2147483648
+              when_full: block
+        EOF
+        exec vector --config /etc/vector/vector.yaml
